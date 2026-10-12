@@ -59,7 +59,7 @@ class BackupTest(unittest.TestCase):
         wanted[0x1F01:0x1F25] = bytes(36)                                  # everything default ...
         wanted[0x1F01 + 2 * 12 + 3] = 0x80                                 # ... except profile 3, rear button
         a = 0x1F3D + 2 * 0x18 + 3 * 2
-        wanted[a:a + 2] = (0x1D98).to_bytes(2, "little")                   # -> Mittelklick
+        wanted[a:a + 2] = (0x1D98).to_bytes(2, "little")                   # -> middle click
         stale = 0x1F3D + 0 * 0x18 + 4 * 2
         wanted[stale:stale + 2] = (0x0000).to_bytes(2, "little")           # stale entry, flag 00 -> stays default
         self.assertEqual(self.g.button(0, 4), 0x1D98)                      # FakeMouse starts with this assigned

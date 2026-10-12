@@ -89,8 +89,8 @@ class MacroTextTest(unittest.TestCase):
         self.assertIs(fn.FUNCTIONS_BY_ADDRESS[0x1EE4], fn.FUNCTIONS_BY_KEY["mittelklick"])
 
     def test_record_length_skips_zero_arguments(self):
-        self.assertEqual(fn.record_length(bytes.fromhex("04 85 e9 00 85 00 00 00 ff ff")), 8)   # Lauter
-        self.assertEqual(fn.record_length(bytes.fromhex("04 89 00 01 83 04 00 ff")), 7)          # warte 256
+        self.assertEqual(fn.record_length(bytes.fromhex("04 85 e9 00 85 00 00 00 ff ff")), 8)   # volume up
+        self.assertEqual(fn.record_length(bytes.fromhex("04 89 00 01 83 04 00 ff")), 7)          # wait 256
         self.assertEqual(fn.record_length(bytes.fromhex("ff ff ff")), 0)
         self.assertEqual(fn.record_length(bytes.fromhex("00 00 00")), 0)
 

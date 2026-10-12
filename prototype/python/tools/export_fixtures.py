@@ -1,7 +1,7 @@
-"""Erzeugt tests/fixtures/parity.json: Szenarien gegen die simulierte Maus des Python-Prototyps.
+"""Generates tests/fixtures/parity.json: scenarios against the simulated mouse of the Python prototype.
 
-Der Rust-Port spielt dieselben Szenarien ab und muss bytegleich dieselben Pakete senden
-(crates/m6980x-core/src/parity_tests.rs). Aufruf aus dem Repo-Wurzelordner:
+The Rust port replays the same scenarios and must send byte-identical packets
+(crates/m6980x-core/src/parity_tests.rs). Run from the repository root:
 
     py -3 prototype/python/tools/export_fixtures.py
 """
@@ -102,7 +102,7 @@ def scenario_import(g):
     wanted[0x1F01 + 1 * 12 + 9] = 0x80
     a = 0x1F3D + 1 * 0x18 + 9 * 2
     wanted[a:a + 2] = (0x0170).to_bytes(2, "little")
-    wanted[0x1F80] = 0x55                                         # Firmware-Bereich: bleibt als Abweichung
+    wanted[0x1F80] = 0x55                                         # firmware area: stays as a difference
     return {"left": backup.import_rom(g, bytes(wanted), log=quiet)}
 
 

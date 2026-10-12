@@ -31,7 +31,7 @@ kopieren, die Werte übersetzen, neu bauen – ohne Codeänderung. Platzhalter w
 `"space|leer"` heißt Anzeigename plus weitere erlaubte Eingabe. `cargo test` prüft, dass jede Sprachdatei alle
 Schlüssel und dieselben Platzhalter hat.
 
-**Projektstand, Vorgaben und offene Aufgaben:** [`docs/UEBERGABE.md`](docs/UEBERGABE.md) · Protokoll:
+**Projektstand, Vorgaben und offene Aufgaben (englisch):** [`docs/HANDOVER.md`](docs/HANDOVER.md) · Protokoll (englisch):
 [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
 
 ## Bauen
@@ -57,8 +57,8 @@ m6980x_configtool_gui            # oder: m6980x_configtool gui
 m6980x_configtool_gui --fake     # Probelauf mit simulierter Maus
 m6980x_configtool_gui --lang de  # auf Deutsch starten
 ```
-Fünf Reiter: Übersicht (Profil, DPI-Stufe, Abtastrate, LED mit Farbvorschau, Live-Anzeige der Maustasten), DPI,
-Tasten, Makros (Editor mit Bild und Byte-Zähler, .ini-Import/-Export) und Sicherung (JSON, .meb, Freigeben).
+Fünf Reiter: Übersicht (Profil, DPI-Stufe, Abtastrate, LED mit Farbvorschau, Live-Anzeige der Maustasten), DPI
+(mit Haken „X und Y synchron“), Tasten, Makros (Editor mit Bild und Byte-Zähler, .ini-Import/-Export) und Sicherung (JSON, .meb, Freigeben).
 Alle Mauszugriffe laufen im Hintergrund. Unten protokolliert ein Log jeden Befehl.
 
 ## Kommandozeile
@@ -117,7 +117,8 @@ cargo test --workspace
 | `crates/m6980x-core/` | Bibliothek: Transport (Windows hidapi, Linux hidraw, Sperre), Protokoll, ROM-Layout, Funktionen, Sicherung |
 | `crates/m6980x-cli/` | Kommandozeile `m6980x_configtool` |
 | `crates/m6980x-gui/` | Oberfläche `m6980x_configtool_gui` |
-| `docs/PROTOCOL.md` | Protokoll mit Belegstufen |
+| `docs/PROTOCOL.md` | Protokoll mit Belegstufen (englisch) |
+| `docs/HANDOVER.md` | Projektstand, Vorgaben, offene Aufgaben (englisch) |
 | `assets/icon_descriptions.json` | Texte zu den Makrobildern (Grundlage für eigene Symbole, keine Gigabyte-Bilder) |
 | `locales/` | Übersetzungen, eine YAML-Datei pro Sprache |
 | `linux/` | udev-Regel |

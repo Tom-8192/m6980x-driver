@@ -32,7 +32,7 @@ per language, embedded at build time. Copy `locales/en.yml` to e.g. `locales/fr.
 no code changes. Placeholders like `%{name}` must be kept; an entry `"space|leer"` means display name plus further
 accepted input. `cargo test` checks that every language file has all keys and the same placeholders.
 
-**Project status, guidelines and open tasks (German):** [`docs/UEBERGABE.md`](docs/UEBERGABE.md) · Protocol:
+**Project status, guidelines and open tasks:** [`docs/HANDOVER.md`](docs/HANDOVER.md) · Protocol:
 [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
 
 ## Building
@@ -59,7 +59,7 @@ m6980x_configtool_gui --fake     # dry run against a simulated mouse
 m6980x_configtool_gui --lang de  # start in German
 ```
 Five tabs: overview (profile, DPI stage, report rate, LED with colour preview, live display of the mouse buttons),
-DPI, buttons, macros (editor with icon and byte counter, `.ini` import/export) and backup (JSON, `.meb`, release
+DPI (with a checkbox to link X and Y), buttons, macros (editor with icon and byte counter, `.ini` import/export) and backup (JSON, `.meb`, release
 all). All mouse access runs in the background; a log at the bottom records every command.
 
 ## Command line
@@ -118,7 +118,8 @@ cargo test --workspace
 | `crates/m6980x-core/` | Library: transport (Windows hidapi, Linux hidraw, lock), protocol, ROM layout, functions, backup |
 | `crates/m6980x-cli/` | Command line `m6980x_configtool` |
 | `crates/m6980x-gui/` | GUI `m6980x_configtool_gui` |
-| `docs/PROTOCOL.md` | Protocol with levels of evidence (German) |
+| `docs/PROTOCOL.md` | Protocol with levels of evidence |
+| `docs/HANDOVER.md` | Project status, guidelines, open tasks |
 | `assets/icon_descriptions.json` | Descriptions of the macro pictures (basis for own icons, no Gigabyte images) |
 | `locales/` | Translations, one YAML file per language |
 | `linux/` | udev rule |

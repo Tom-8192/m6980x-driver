@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "m6980x-configtool"
 version = "1.1.0"
-description = "M6980X Configuration Tool: inoffizielles Konfigurationstool fuer die Gigabyte GHOST M6980X (Windows und Linux)"
+description = "M6980X Configuration Tool: unofficial configuration tool for the Gigabyte GHOST M6980X mouse (Windows and Linux)"
 requires-python = ">=3.9"
-# Linux nutzt /dev/hidraw direkt und braucht kein hidapi
+# Linux uses /dev/hidraw directly and needs no hidapi
 dependencies = ["hidapi>=0.14; sys_platform != 'linux'"]
 
 [project.scripts]

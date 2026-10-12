@@ -152,7 +152,7 @@ class App:
         self.status.set(f"... {label}")
         self.dev.submit(label, job, done)
 
-    # -- Übersicht ---------------------------------------------------------------------
+    # -- overview ---------------------------------------------------------------------
     def _build_overview(self):
         f = ttk.Frame(self.nb, padding=10)
         self.nb.add(f, text="Übersicht")
@@ -322,7 +322,7 @@ class App:
             self.var_rate.set(f"{1000 // FACTORY_INTERVAL_MS} Hz")
         self.run("DPI-Werkswerte und 500 Hz", apply_factory_defaults, done, persist=True)
 
-    # -- Tasten ------------------------------------------------------------------------
+    # -- buttons ----------------------------------------------------------------------
     def _build_buttons(self):
         f = ttk.Frame(self.nb, padding=10)
         self.nb.add(f, text="Tasten")
@@ -350,7 +350,7 @@ class App:
         self.targets += [(f.label, "fn", f) for f in fn.FUNCTIONS if f.size and f.record]
         self.targets += [(f"Makro {s + 1}" + (f" '{n}'" if n else ""), "macro", s)
                          for s, n in enumerate(self.macro_names)]
-        for b, cb in self.btn_target.items():            # "Standard" says what the button then does
+        for b, cb in self.btn_target.items():            # "Standard" (default) says what the button then does
             cb.configure(values=[standard_label(b)] + [t[0] for t in self.targets[1:]])
 
     def _show_buttons(self):
@@ -392,7 +392,7 @@ class App:
             self._show_buttons()
         self.run(f"Profil {p + 1}: alle Tasten Standard", job, done)
 
-    # -- Makros ------------------------------------------------------------------------
+    # -- macros -----------------------------------------------------------------------
     def _build_macros(self):
         f = ttk.Frame(self.nb, padding=10)
         self.nb.add(f, text="Makros")
@@ -550,7 +550,7 @@ class App:
             self.run(f"Makro {slot + 1} loeschen", lambda g: (g.clear_macro(slot), g.read_rom(0, ROM_SIZE))[1],
                      self._show_macros)
 
-    # -- Sicherung ---------------------------------------------------------------------
+    # -- backup -----------------------------------------------------------------------
     def _build_backup(self):
         f = ttk.Frame(self.nb, padding=10)
         self.nb.add(f, text="Sicherung")
