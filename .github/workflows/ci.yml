@@ -2,7 +2,13 @@ name: CI
 
 on:
   push:
+    branches: ["**"]   # Tags baut der Release-Workflow
   pull_request:
+
+# ein neuer Push bricht den noch laufenden Lauf desselben Branches ab
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   rust:
