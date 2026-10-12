@@ -1,5 +1,5 @@
-//! Simulierte Maus fuer Tests und den Probelauf der Oberflaeche (Port von `FakeMouse` aus
-//! prototype/python/tests/test_protocol.py). Antwortet wie das Geraet: nach jedem Befehl einmal "busy", dann "done".
+//! Simulated mouse for tests and the GUI dry run (port of `FakeMouse` from
+//! prototype/python/tests/test_protocol.py). Answers like the device: after every command "busy" once, then "done".
 
 use std::collections::HashMap;
 
@@ -13,7 +13,7 @@ fn hx(text: &str) -> [u8; REPORT_LEN] {
     v.try_into().unwrap()
 }
 
-/// Antworten der echten Maus (Statusbyte + 7 Datenbytes)
+/// replies of the real mouse (status byte + 7 data bytes)
 pub fn default_replies() -> HashMap<Vec<u8>, [u8; REPORT_LEN]> {
     HashMap::from([
         (vec![0x00, 0x00], hx("40 0c 12 09 2d 00 03 01")),
@@ -33,13 +33,13 @@ pub struct FakeMouse {
     pub accept_profile_switch: bool,
     pub leds: [[u8; 3]; 3],
     pub accept_led: bool,
-    /// je DPI-Stufe [x_step, y_step] und [x_num, x_den, y_num, y_den] - Werte der echten Maus
+    /// per DPI stage [x_step, y_step] and [x_num, x_den, y_num, y_den] - values of the real mouse
     pub dpi_steps: [[u8; 2]; 4],
     pub dpi_ratio: [[u8; 4]; 4],
     pub dpi_stage: u8,
     pub rom: Vec<u8>,
     pub buffer: [u8; 32],
-    /// (Profil, Geraetetaste) -> (Flags, Adresse)
+    /// (profile, device button) -> (flags, address)
     pub buttons: HashMap<(u8, u8), (u8, u16)>,
     pub interval: u8,
     pub saved: bool,
@@ -122,7 +122,7 @@ impl Transport for FakeMouse {
                 let [a, b, c, e] = self.dpi_ratio[usize::from(d[3])];
                 self.state = [0x41, a, b, c, e, 0xFF, 0xFF, 0xFF];
             }
-            // altes Byte 2 wie bei der echten Maus
+            // stale byte 2 like on the real mouse
             (0x01, 0x08) => self.state = Self::with_status(0x41, &[self.profile, 0x1F], &self.state),
             (0x01, 0x02) => self.saved = true,
             (0x01, 0x85) => {
@@ -146,7 +146,7 @@ impl Transport for FakeMouse {
             (0x02, 0x02) => self.rom[addr..addr + 2].copy_from_slice(&d[5..7]),
             (0x02, 0x01) => self.rom[addr] = d[5],
             (0x02, 0x00) if key.is_none() => {
-                // ueber 0x2000 gespiegelt wie die echte Maus
+                // mirrored above 0x2000 like the real mouse
                 let mut s = [0x42u8; REPORT_LEN];
                 for (i, b) in s[1..].iter_mut().enumerate() {
                     *b = self.rom[(addr + i) % self.rom.len()];
@@ -155,7 +155,7 @@ impl Transport for FakeMouse {
             }
             _ => match key {
                 Some(k) => self.state = self.replies[&k],
-                None => panic!("unerwarteter Befehl {}", crate::hex(&d)),
+                None => panic!("unexpected command {}", crate::hex(&d)),
             },
         }
         self.pending = self.busy_polls;
@@ -173,6 +173,6 @@ impl Transport for FakeMouse {
     }
 
     fn path(&self) -> String {
-        "simuliert".into()
+        "simulated".into()
     }
 }

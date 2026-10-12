@@ -1,10 +1,10 @@
-//! Hilfetexte der Kommandozeile aus den Sprachdateien (locales/*.yml):
+//! Command-line help texts from the language files (locales/*.yml):
 //!
-//! * `cli.about` - Programm, `cli.cmd.<pfad>` - Befehl (z. B. `cli.cmd.dpi.set`)
-//! * `cli.arg.<pfad>.<argument>` - Argument eines Befehls, sonst `cli.opt.<argument>` (gemeinsame wie `temporary`)
-//! * `cli.heading.*` - Ueberschriften, die sonst clap selbst (englisch) schreibt
+//! * `cli.about` - program, `cli.cmd.<path>` - command (e.g. `cli.cmd.dpi.set`)
+//! * `cli.arg.<path>.<argument>` - argument of a command, otherwise `cli.opt.<argument>` (shared ones like `temporary`)
+//! * `cli.heading.*` - headings that clap would otherwise write itself (in English)
 //!
-//! Ein Test prueft, dass jeder Befehl und jedes Argument einen Text hat.
+//! A test checks that every command and every argument has a text.
 
 use clap::{Arg, Command};
 use m6980x_core::i18n;
@@ -38,9 +38,9 @@ fn localize_cmd(cmd: Command, path: String) -> Command {
                 Some(text) => arg.help(text),
                 None => arg,
             };
-            // Standardwert des Makro-Modus in der aktuellen Sprache (eingeben kann man jede)
+            // default of the macro mode in the current language (any language can be typed)
             let arg = if arg.get_id() == "mode" { arg.default_value(i18n::name("mode.once")) } else { arg };
-            // mit eigener Ueberschrift sortiert clap Positionsargumente sonst alphabetisch
+            // with a custom heading, clap would otherwise sort positional arguments alphabetically
             let arg = match arg.get_index() {
                 Some(i) => arg.display_order(i),
                 None => arg,
@@ -54,14 +54,14 @@ fn localize_cmd(cmd: Command, path: String) -> Command {
         })
 }
 
-/// Alle Texte in der aktuellen Sprache. Baut den Befehl vorher, damit clap seine eigenen --help/--version/help
-/// schon angelegt und die globalen Optionen an die Unterbefehle verteilt hat.
+/// All texts in the current language. Builds the command first so that clap has already created its own
+/// --help/--version/help and propagated the global options to the subcommands.
 pub fn localize(mut cmd: Command) -> Command {
     cmd.build();
     localize_cmd(cmd, String::new())
 }
 
-/// Befehle und Argumente ohne Text (fuer den Test).
+/// Commands and arguments without a text (for the test).
 #[cfg(test)]
 pub fn missing(mut cmd: Command) -> Vec<String> {
     fn walk(cmd: &Command, path: &str, out: &mut Vec<String>) {
@@ -73,7 +73,7 @@ pub fn missing(mut cmd: Command) -> Vec<String> {
                 out.push(format!("cli.arg.{path}.{} / cli.opt.{}", arg.get_id(), arg.get_id()));
             }
         }
-        // clap spiegelt unter "help" alle Befehle; dort zaehlt nur der Text von "help" selbst
+        // clap mirrors all commands below "help"; only the text of "help" itself counts there
         for sub in cmd.get_subcommands().filter(|_| !path.ends_with("help") && path != "help") {
             let p = if path.is_empty() { sub.get_name().to_string() } else { format!("{path}.{}", sub.get_name()) };
             walk(sub, &p, out);

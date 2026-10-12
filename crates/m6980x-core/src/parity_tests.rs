@@ -1,5 +1,5 @@
-//! Paritaet mit dem Python-Prototyp: dieselben Szenarien wie prototype/python/tools/export_fixtures.py
-//! muessen bytegleich dieselben Pakete senden und dasselbe ROM hinterlassen.
+//! Parity with the Python prototype: the same scenarios as prototype/python/tools/export_fixtures.py
+//! must send byte-identical packets and leave the same ROM.
 
 use std::time::Duration;
 
@@ -31,7 +31,7 @@ fn long_macro() -> String {
     std::iter::repeat_n(LONG_MACRO_PARTS.join(", "), 6).collect::<Vec<_>>().join(", ")
 }
 
-/// Der Prototyp schreibt Umlaute als ae/oe/ue/ss, Rust zeigt sie.
+/// The prototype writes umlauts as ae/oe/ue/ss, Rust shows them.
 fn ascii(text: &str) -> String {
     text.replace('ä', "ae").replace('ö', "oe").replace('ü', "ue").replace('ß', "ss")
 }
@@ -199,7 +199,7 @@ fn scenarios_send_identical_packets() {
         if let Some(i) =
             (0..sent.len().max(want.len())).find(|&i| sent.get(i).map(String::as_str) != want.get(i).copied())
         {
-            panic!("{name}: Paket {i} weicht ab: Rust {:?}, Python {:?}", sent.get(i), want.get(i));
+            panic!("{name}: packet {i} differs: Rust {:?}, Python {:?}", sent.get(i), want.get(i));
         }
         assert_eq!(sha(&g.t.rom), expected["rom_sha256"].as_str().unwrap(), "{name}: ROM");
         if let Value::Object(map) = extra {
@@ -215,12 +215,12 @@ fn macro_text_encoding_matches() {
     let fx = fixture();
     for case in fx["encode"].as_array().unwrap() {
         let text = case["text"].as_str().unwrap();
-        // Die Python-Szenarien bauen den langen Makrotext selbst - hier denselben verwenden.
+        // The Python scenarios build the long macro text themselves - use the same one here.
         match (fnc::encode_events(text), case.get("hex")) {
             (Ok(bytes), Some(want)) => assert_eq!(hex(&bytes), want.as_str().unwrap(), "{text}"),
             (Err(e), None) => {
                 let want = case["error"].as_str().unwrap();
-                // Pythons int()-Fehlertexte haben keine deutsche Entsprechung
+                // Python int() error texts have no German counterpart
                 if !want.starts_with("invalid literal") {
                     assert_eq!(ascii(&e.to_string()), want, "{text}");
                 }
@@ -236,7 +236,7 @@ fn macro_decoding_matches() {
     for case in fixture()["decode"].as_array().unwrap() {
         let data = h(case["hex"].as_str().unwrap());
         let (mode, events) = fnc::decode_record(&data);
-        // Der Prototyp schreibt Umlaute als ae/oe/ue ("drueck"), Rust zeigt sie ("drück").
+        // The prototype writes umlauts as ae/oe/ue ("drueck"), Rust shows them ("drück").
         let events: Vec<String> = events.iter().map(|e| ascii(e)).collect();
         assert_eq!(serde_json::json!(mode.as_deref().map(ascii)), case["mode"], "{case}");
         assert_eq!(serde_json::json!(events), case["events"], "{case}");

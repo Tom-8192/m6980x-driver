@@ -1,17 +1,17 @@
 {
-  "_info": "Textbeschreibungen der in Macro.exe eingebetteten Bilder (Gigabyte-Eigentum). Gedacht als Vorlage, um mit einer Bild-KI eigene, urheberrechtsfreie Symbole zu erzeugen - Motiv nachempfinden, nicht kopieren. Index = Position in der jeweiligen Bildliste (assets/embedded_icons/<liste>/<index>.bmp).",
+  "_info": "Text descriptions of the images embedded in Macro.exe (Gigabyte property). Meant as a template for creating own, copyright-free icons with an image AI - recreate the motif, do not copy it. index = position in the respective image list (assets/embedded_icons/<list>/<index>.bmp). Per item, \"de\" is the German description (shown in the German GUI), \"en\" the English image AI prompt.",
   "style": {
     "de": "Quadratischer Knopf, 50x50 Pixel. Dunkelgrauer, leicht gebürsteter Metallhintergrund mit hellgrauem, abgeschrägtem Rahmen (3D-Kante). Motiv mittig, realistisch-plastisch mit leichtem Glanz, Gaming-/Militär-Look. Weitgehend entsättigt, nur einzelne Akzentfarben (Rot, Orange, Gelb).",
     "en": "Square game UI button icon, 50x50 px, dark brushed gunmetal background with light grey bevelled frame, centered semi-realistic motif with subtle gloss, military gaming aesthetic, mostly desaturated with occasional red, orange or yellow accents, no text unless stated"
   },
   "macro_default": {
     "list": "TFORM1_ImageList2",
-    "rule": "Index n (1-70) = Knopf mit kleinem Wort 'MACRO' oben und großer, silbern verlaufender Zahl n darunter. Index 0 = schwarz (leer). Wird angezeigt, wenn ein Makro kein eigenes Bild hat.",
+    "rule": "Index n (1-70) = button with the small word 'MACRO' at the top and a large silver gradient number n below. Index 0 = black (empty). Shown when a macro has no icon of its own.",
     "en": "button with the small word 'MACRO' at the top and a large bold silver gradient number below"
   },
   "macro_pictures": {
     "list": "TFORM3_ImageList1",
-    "note": "Bildauswahl für Makros. Bild-Byte auf der Maus = 100 + Index. Index 0 ist nur der Hintergrund des Auswahlfensters.",
+    "note": "Icon choice for macros. Icon byte on the mouse = 100 + index. Index 0 is only the background of the selection window.",
     "items": [
       {"index": 0, "de": "Hintergrundmuster: dunkles Wabengitter (kein auswählbares Bild)", "en": "seamless dark hexagonal honeycomb mesh texture"},
       {"index": 1, "de": "Fernglas", "en": "pair of black binoculars"},
@@ -58,7 +58,7 @@
   },
   "function_pictures": {
     "list": "TFORM2_ImageList1",
-    "note": "Symbole der Tastenfunktionen (gleiche Reihenfolge wie Mappingdefault.ini [List] / m6980x_configtool/functions.py), danach Symbole des Makro-Editors.",
+    "note": "Icons of the button functions (same order as Mappingdefault.ini [List] / crates/m6980x-core/src/functions.rs), followed by the icons of the macro editor.",
     "items": [
       {"index": 0, "function": "linksklick", "de": "Graue Soldatenfigur hebt links eine rote Fahne, Buchstabe 'L'", "en": "grey soldier figure raising a red flag on the left, letter L"},
       {"index": 1, "function": "rechtsklick", "de": "Graue Soldatenfigur hebt rechts eine rote Fahne, Buchstabe 'R'", "en": "grey soldier figure raising a red flag on the right, letter R"},

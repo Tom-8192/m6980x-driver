@@ -1,8 +1,8 @@
 /target/
-# Python-Prototyp
+# Python prototype
 __pycache__/
 *.egg-info/
-# Nie veroeffentlichen: Gigabyte-Bilder/-Programme/-Dateien, Mitschnitte (enthalten Tastatureingaben), Sicherungen der eigenen Maus
+# Never publish: Gigabyte images/programs/files, captures (contain keystrokes), backups of your own mouse
 assets/embedded_icons/
 assets/original_icons/
 original_software/

@@ -2,10 +2,10 @@ name: CI
 
 on:
   push:
-    branches: ["**"]   # Tags baut der Release-Workflow
+    branches: ["**"]   # tags are built by the release workflow
   pull_request:
 
-# ein neuer Push bricht den noch laufenden Lauf desselben Branches ab
+# a new push cancels the still running run of the same branch
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -19,7 +19,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
-      - name: Linux-Pakete fuer die Oberflaeche
+      - name: Linux packages for the GUI
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -40,7 +40,7 @@ jobs:
             target/release/m6980x_configtool_gui.exe
 
   prototype:
-    # Python-Prototyp: eigene Tests, und die Paritaets-Fixtures muessen zu ihm passen
+    # Python prototype: its own tests, and the parity fixtures must match it
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

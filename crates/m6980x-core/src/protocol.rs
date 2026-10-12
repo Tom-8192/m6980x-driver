@@ -1,13 +1,13 @@
-//! Befehlsschicht der GHOST M6980X (Lesebefehle plus einzeln am Geraet bestaetigte Schreibbefehle).
+//! Command layer of the GHOST M6980X (read commands plus write commands confirmed one by one on the device).
 //!
-//! Paket auf der Leitung (8 Bytes, keine Report-ID): `[Gruppe, Befehl, arg0..arg5]`.
-//! Handshake aus der Original-Macro.exe (0x444aac):
-//!   1. GET_FEATURE, bis Statusbit 0x80 (busy) aus ist
-//!   2. SET_FEATURE mit dem Befehl
-//!   3. GET_FEATURE, bis Statusbit 0x40 (done) gesetzt ist; Antwort = `[Status, data0..data6]`
+//! Packet on the wire (8 bytes, no report ID): `[group, command, arg0..arg5]`.
+//! Handshake from the original Macro.exe (0x444aac):
+//!   1. GET_FEATURE until status bit 0x80 (busy) is clear
+//!   2. SET_FEATURE with the command
+//!   3. GET_FEATURE until status bit 0x40 (done) is set; reply = `[status, data0..data6]`
 //!
-//! Antwortbytes, die ein Befehl nicht fuellt, behalten alte Werte - nur dokumentierte Bytes auswerten.
-//! Belege zu jedem Befehl: docs/PROTOCOL.md.
+//! Reply bytes a command does not fill keep stale values - only evaluate documented bytes.
+//! Evidence for every command: docs/PROTOCOL.md.
 
 use std::thread::sleep;
 use std::time::Duration;
@@ -24,30 +24,30 @@ pub const GROUP_SYSTEM: u8 = 0x00;
 pub const GROUP_REGISTER: u8 = 0x01;
 pub const GROUP_ROM: u8 = 0x02;
 
-/// 8 KB, darueber gespiegelt (geprueft)
+/// 8 KB, mirrored above (checked)
 pub const ROM_SIZE: usize = 0x2000;
 pub const ROM_READ_CHUNK: usize = 7;
-/// Puffer-Bytes 0-5, 6-11, ..., 30-31
+/// buffer bytes 0-5, 6-11, ..., 30-31
 pub const ROM_FILL_CMDS: [u8; 6] = [0x03, 0x05, 0x06, 0x07, 0x08, 0x09];
 pub const PROFILES: usize = 3;
 pub const BUTTONS: usize = 10;
-/// Eintraege in den Registern 03/04
+/// entries in registers 03/04
 pub const DPI_STAGES: usize = 4;
-/// Die DPI-Taste schaltet 0 -> 1 -> 2 (beobachtet); die LEDs zeigen Stufe + 1.
+/// The DPI button cycles 0 -> 1 -> 2 (observed); the LEDs show stage + 1.
 pub const DPI_BUTTON_STAGES: usize = 3;
 /// Mappingdefault.ini [6980DPIdefault] max
 pub const MAX_DPI: u32 = 6030;
-/// je Kanal: aus, halb, voll
+/// per channel: off, half, full
 pub const LED_LEVELS: [u8; 3] = [0, 1, 2];
-/// konstantes letztes Byte im ROM und bei Set-Befehlen des Originals
+/// constant last byte in the ROM and in the original's set commands
 pub const ROM_TRAILER: u8 = 0x12;
-/// Macro.exe wartet nach einem Set-Befehl 10 ms.
+/// Macro.exe waits 10 ms after a set command.
 pub const WRITE_DELAY: Duration = Duration::from_millis(10);
 pub const SUPPORTED_MODEL: &str = "6980X";
 
-/// Werkswerte der drei Stufen ([6980DPIdefault]; der 4. INI-Wert gehoert zu einer ungenutzten Stufe)
+/// Factory values of the three stages ([6980DPIdefault]; the 4th INI value belongs to an unused stage)
 pub const FACTORY_DPI: [u32; 3] = [810, 1620, 3240];
-/// 500 Hz: der Default-Knopf des Originals (0x44abbc) schreibt auch 01 8B 02
+/// 500 Hz: the original's default button (0x44abbc) also writes 01 8B 02
 pub const FACTORY_INTERVAL_MS: u8 = 2;
 
 pub type Reply = [u8; REPORT_LEN];
@@ -56,8 +56,8 @@ fn device<T>(msg: impl Into<String>) -> Result<T> {
     Err(Error::Device(msg.into()))
 }
 
-/// Modellname wie im Original (0x42ebd8) aus den Identify-Antwortdaten (0C 12 ...):
-/// Byte 6 = 0 -> 6980, 1 und Byte 2 = 9 -> 6980X, 1 sonst -> M8000X, 4 -> M8600, sonst unbekannt (None).
+/// Model name as in the original (0x42ebd8) from the identify reply data (0C 12 ...):
+/// byte 6 = 0 -> 6980, 1 and byte 2 = 9 -> 6980X, 1 otherwise -> M8000X, 4 -> M8600, otherwise unknown (None).
 pub fn model_of(data: &[u8]) -> Option<&'static str> {
     if data.len() < 7 || data[0..2] != [0x0C, 0x12] {
         return None;
@@ -98,7 +98,7 @@ impl DpiStage {
     }
 }
 
-/// Wie Pythons `round(dpi / unit)` (bei genau .5 zur geraden Zahl), mit Bereichspruefung.
+/// Like Python `round(dpi / unit)` (exactly .5 goes to the even number), with range check.
 pub fn dpi_to_steps(dpi: i64, unit: u8) -> Result<u8> {
     let unit = i64::from(unit);
     let steps = if dpi < 0 {
@@ -113,7 +113,7 @@ pub fn dpi_to_steps(dpi: i64, unit: u8) -> Result<u8> {
     Ok(steps as u8)
 }
 
-/// 0x445900: kleinster unterstuetzter Sensorschritt >= value, sonst der groesste unterstuetzte.
+/// 0x445900: smallest supported sensor step >= value, otherwise the largest supported one.
 pub fn snap_step(value: u8, supported: &[u8]) -> Option<u8> {
     supported.iter().copied().filter(|&s| s >= value).min().or_else(|| supported.iter().copied().max())
 }
@@ -122,9 +122,9 @@ fn gcd(a: u32, b: u32) -> u32 {
     if b == 0 { a } else { gcd(b, a % b) }
 }
 
-/// Port von 0x445900: jede Achse bekommt einen unterstuetzten Sensorschritt plus den Bruch
-/// gewuenscht/Sensor (gekuerzt wie 0x445640), mit dem die Firmware skaliert.
-/// Liefert [(Achse, Sensorschritt, Zaehler, Nenner)] fuer X (0) und Y (1).
+/// Port of 0x445900: every axis gets a supported sensor step plus the fraction
+/// wanted/sensor (reduced like 0x445640) that the firmware scales with.
+/// Returns [(axis, sensor step, numerator, denominator)] for X (0) and Y (1).
 pub fn dpi_write_plan(x_steps: u8, y_steps: u8, supported: &[u8]) -> Result<Vec<(u8, u8, u8, u8)>> {
     let mut plan = Vec::new();
     for (axis, wanted) in [(0u8, x_steps), (1, y_steps)] {
@@ -149,8 +149,8 @@ impl<T: Transport> M6980X<T> {
         Self { t, poll_interval: Duration::from_millis(4), busy_tries: 20, done_tries: 200 }
     }
 
-    // -- unterste Ebene --------------------------------------------------------------------
-    /// Ein Befehl mit Handshake. `trailer` landet in Byte 7, `delay` ist die Wartezeit nach dem Senden.
+    // -- lowest level ------------------------------------------------------------------------
+    /// One command with handshake. `trailer` goes into byte 7, `delay` is the wait after sending.
     pub fn xfer(&mut self, group: u8, cmd: u8, args: &[u8], trailer: Option<u8>, delay: Duration) -> Result<Reply> {
         if args.len() > 6 {
             return invalid(tr!("error.too_many_args"));
@@ -199,8 +199,8 @@ impl<T: Transport> M6980X<T> {
         }
     }
 
-    /// Das Original behandelt ein fehlgeschlagenes GET_FEATURE wie "nicht bereit" und versucht es erneut;
-    /// die Maus liefert z. B. waehrend eines Drucks auf die DPI-/Profiltaste kurze Reports.
+    /// The original treats a failed GET_FEATURE as "not ready" and retries; the mouse returns short
+    /// reports e.g. while the DPI/profile button is pressed.
     fn poll(&mut self) -> Option<Reply> {
         self.t.get_feature().ok()
     }
@@ -212,20 +212,20 @@ impl<T: Transport> M6980X<T> {
         self.xfer(GROUP_REGISTER, reg, args, None, Duration::ZERO)
     }
 
-    /// Set-Befehle des Originals warten 10 ms; die meisten enden auf 0x12.
+    /// The original's set commands wait 10 ms; most of them end with 0x12.
     fn set_register(&mut self, reg: u8, args: &[u8], trailer: Option<u8>) -> Result<Reply> {
         self.xfer(GROUP_REGISTER, reg | 0x80, args, trailer, WRITE_DELAY)
     }
 
-    // -- System -----------------------------------------------------------------------------
-    /// Das Original akzeptiert das Geraet nur, wenn Antwortbytes 1-2 = 0C 12 sind (0x44407c).
+    // -- system ------------------------------------------------------------------------------
+    /// The original only accepts the device if reply bytes 1-2 = 0C 12 (0x44407c).
     pub fn identify(&mut self) -> Result<Identify> {
         let r = self.xfer(GROUP_SYSTEM, 0x00, &[], None, Duration::ZERO)?;
         Ok(Identify { signature_ok: r[1..3] == [0x0C, 0x12], raw: hex(&r[1..]), model: model_of(&r[1..]) })
     }
 
-    /// Nur die 6980X zulassen: die anderen GHOST-Modelle haben einen anderen Speicheraufbau
-    /// (M8000X/M8600: 32 KB, 5 Profile, 70 Makros; 6980: anderer DPI-Bereich), unsere Adressen waeren falsch.
+    /// Only allow the 6980X: the other GHOST models have a different memory layout
+    /// (M8000X/M8600: 32 KB, 5 profiles, 70 macros; 6980: different DPI range), our addresses would be wrong.
     pub fn check_model(&mut self) -> Result<Identify> {
         let ident = self.identify()?;
         if !ident.signature_ok {
@@ -248,12 +248,12 @@ impl<T: Transport> M6980X<T> {
         Ok(raw.iter().map(|&c| if c.is_ascii() { c as char } else { '\u{FFFD}' }).collect())
     }
 
-    // -- Register ---------------------------------------------------------------------------
+    // -- registers ---------------------------------------------------------------------------
     pub fn active_profile(&mut self) -> Result<u8> {
         Ok(self.get_register(0x08, &[])?[1])
     }
 
-    /// Aktives Hardware-Profil (0-2) umschalten und durch Zuruecklesen pruefen.
+    /// Switch the active hardware profile (0-2) and verify by reading back.
     pub fn set_active_profile(&mut self, profile: u8) -> Result<()> {
         if usize::from(profile) >= PROFILES {
             return invalid(tr!("error.profile_range", profiles = PROFILES - 1));
@@ -266,7 +266,7 @@ impl<T: Transport> M6980X<T> {
         Ok(())
     }
 
-    /// Register 07: aktive DPI-Stufe, 0-basiert (1 = Mitte, 2 von 3 LEDs an - am Geraet gesehen).
+    /// Register 07: active DPI stage, 0-based (1 = middle, 2 of 3 LEDs lit - seen on the device).
     pub fn active_dpi_stage(&mut self) -> Result<u8> {
         Ok(self.get_register(0x07, &[])?[1])
     }
@@ -276,18 +276,18 @@ impl<T: Transport> M6980X<T> {
         Ok(u16::from(r[1]) | u16::from(r[2]) << 8)
     }
 
-    /// Register 02 (01 02 00 .. 12, 4 ms), vom Original beim Verlassen der Einstellungsseite gesendet.
-    /// Ohne gehen Abtastrate und DPI beim Abstecken verloren (getestet); LED-Farben bleiben auch so.
+    /// Register 02 (01 02 00 .. 12, 4 ms), sent by the original when leaving the settings page.
+    /// Without it, report rate and DPI are lost when unplugged (tested); LED colours stay anyway.
     pub fn save_settings(&mut self) -> Result<()> {
         self.xfer(GROUP_REGISTER, 0x02, &[0], Some(ROM_TRAILER), Duration::from_millis(4)).map(|_| ())
     }
 
-    /// Register 0B: USB-Abfrageintervall in ms (1-8); Abtastrate = 1000 / Wert Hz.
+    /// Register 0B: USB polling interval in ms (1-8); report rate = 1000 / value Hz.
     pub fn report_interval(&mut self) -> Result<u8> {
         Ok(self.get_register(0x0B, &[])?[1])
     }
 
-    /// Wie das Original (Mitschnitt: 500 -> 333 Hz = 01 8B 02 -> 01 8B 03).
+    /// Like the original (capture: 500 -> 333 Hz = 01 8B 02 -> 01 8B 03).
     pub fn set_report_interval(&mut self, ms: u8) -> Result<()> {
         if !(1..=8).contains(&ms) {
             return invalid(tr!("error.interval_range"));
@@ -305,8 +305,8 @@ impl<T: Transport> M6980X<T> {
         Ok([r[1], r[2], r[3]])
     }
 
-    /// LED-Farbe eines Profils setzen. Jeder Kanal hat drei Stufen: 0 aus, 1 halb, 2 voll.
-    /// Wie das Original (0x445ba8) ohne Umschalten des aktiven Profils.
+    /// Set the LED colour of a profile. Every channel has three levels: 0 off, 1 half, 2 full.
+    /// Like the original (0x445ba8), without switching the active profile.
     pub fn set_led_color(&mut self, profile: u8, rgb: [u8; 3]) -> Result<()> {
         if usize::from(profile) >= PROFILES {
             return invalid(tr!("error.profile_range", profiles = PROFILES - 1));
@@ -335,7 +335,7 @@ impl<T: Transport> M6980X<T> {
         let a = self.get_register(0x03, &[0, stage])?;
         let b = self.get_register(0x04, &[0, stage])?;
         let or = |v: u8, d: u8| if v == 0 { d } else { v };
-        // wie das Original (0x4457fc): nur Nenner 0 werden durch 1 ersetzt
+        // like the original (0x4457fc): only denominators 0 are replaced by 1
         Ok(DpiStage {
             x_step: a[1],
             y_step: or(a[2], a[1]),
@@ -347,8 +347,8 @@ impl<T: Transport> M6980X<T> {
         })
     }
 
-    /// Aktive DPI-Stufe waehlen wie das Original (0x445280). Software kann auch Stufe 3 waehlen,
-    /// die die DPI-Taste nie erreicht.
+    /// Select the active DPI stage like the original (0x445280). Software can also select stage 3,
+    /// which the DPI button never reaches.
     pub fn set_active_dpi_stage(&mut self, stage: u8) -> Result<()> {
         if usize::from(stage) >= DPI_STAGES {
             return invalid(tr!("error.dpi_stage_range", dpi_stages = DPI_STAGES - 1));
@@ -361,7 +361,7 @@ impl<T: Transport> M6980X<T> {
         Ok(())
     }
 
-    /// DPI einer Stufe setzen, gerundet auf die Geraete-Einheit (90). Liefert die zurueckgelesene Stufe.
+    /// Set the DPI of a stage, rounded to the device unit (90). Returns the stage as read back.
     pub fn set_dpi(&mut self, stage: u8, x_dpi: i64, y_dpi: Option<i64>) -> Result<DpiStage> {
         if usize::from(stage) >= DPI_STAGES {
             return invalid(tr!("error.dpi_stage_range", dpi_stages = DPI_STAGES - 1));
@@ -374,7 +374,7 @@ impl<T: Transport> M6980X<T> {
         };
         let supported = self.dpi_supported_steps()?;
         let plan = dpi_write_plan(x, y, &supported)?;
-        // gleiche Reihenfolge wie das Original: Sensorschritte X, Y, dann Brueche X, Y
+        // same order as the original: sensor steps X, Y, then fractions X, Y
         for &(axis, step, _, _) in &plan {
             self.set_register(0x03, &[axis, stage, step], Some(ROM_TRAILER))?;
         }
@@ -389,8 +389,8 @@ impl<T: Transport> M6980X<T> {
         Ok(actual)
     }
 
-    /// Wie der Default-Knopf des Originals: DPI aus [6980DPIdefault], dann Abtastrate 500 Hz.
-    /// Liefert die neuen DPI-Stufen.
+    /// Like the original's default button: DPI from [6980DPIdefault], then report rate 500 Hz.
+    /// Returns the new DPI stages.
     pub fn apply_factory_defaults(&mut self) -> Result<Vec<DpiStage>> {
         let stages = FACTORY_DPI
             .iter()
@@ -401,9 +401,9 @@ impl<T: Transport> M6980X<T> {
         Ok(stages)
     }
 
-    /// ROM-Adresse des Datensatzes einer Geraetetaste oder None fuer ihre Grundfunktion.
-    /// Geraetenummern (an der Maus ermittelt): 0 links, 1 rechts, 2 Mitte, 3 hinten, 4 vorne,
-    /// 5 keine Taste, 6 Kipp links, 7 Kipp rechts, 8 Rad hoch, 9 Rad runter.
+    /// ROM address of the record of a device button, or None for its built-in function.
+    /// Device numbers (found on the mouse): 0 left, 1 right, 2 middle, 3 back, 4 forward,
+    /// 5 no button, 6 tilt left, 7 tilt right, 8 wheel up, 9 wheel down.
     pub fn button(&mut self, profile: u8, button: u8) -> Result<Option<u16>> {
         let r = self.get_register(0x05, &[profile, button])?;
         if r[1] & 0x80 == 0 {
@@ -419,8 +419,8 @@ impl<T: Transport> M6980X<T> {
         Ok(())
     }
 
-    /// Taste auf einen Funktionsdatensatz oder Makro-Slot legen wie das Original
-    /// (01 85 <Profil> <Taste> 80 <lo> <hi> 12, danach das aktive Profil neu aktivieren).
+    /// Put a button on a function record or macro slot like the original
+    /// (01 85 <profile> <button> 80 <lo> <hi> 12, then re-activate the active profile).
     pub fn set_button(&mut self, profile: u8, button: u8, address: u16) -> Result<()> {
         Self::check_button(profile, button)?;
         if usize::from(address) >= ROM_SIZE {
@@ -437,7 +437,7 @@ impl<T: Transport> M6980X<T> {
         Ok(())
     }
 
-    // -- ROM --------------------------------------------------------------------------------
+    // -- ROM ---------------------------------------------------------------------------------
     pub fn read_rom(&mut self, addr: u16, length: usize) -> Result<Vec<u8>> {
         self.read_rom_progress(addr, length, &mut |_, _| {})
     }
@@ -460,21 +460,21 @@ impl<T: Transport> M6980X<T> {
         Ok(out)
     }
 
-    /// 02 01 <lo> <hi> 00 <Wert> 00 12 - vom Makro-Editor des Originals benutzt (1 ms).
+    /// 02 01 <lo> <hi> 00 <value> 00 12 - used by the original's macro editor (1 ms).
     pub fn write_rom_byte(&mut self, addr: u16, value: u8) -> Result<()> {
         let [lo, hi] = addr.to_le_bytes();
         self.xfer(GROUP_ROM, 0x01, &[lo, hi, 0, value, 0], Some(ROM_TRAILER), Duration::from_millis(1)).map(|_| ())
     }
 
-    /// 02 02 <lo> <hi> 00 <b0> <b1> 12 - 2-Byte-Schreiben des Originals (0x444ba8, 1 ms).
+    /// 02 02 <lo> <hi> 00 <b0> <b1> 12 - 2-byte write of the original (0x444ba8, 1 ms).
     pub fn write_rom_word(&mut self, addr: u16, data: [u8; 2]) -> Result<()> {
         let [lo, hi] = addr.to_le_bytes();
         self.xfer(GROUP_ROM, 0x02, &[lo, hi, 0, data[0], data[1]], Some(ROM_TRAILER), Duration::from_millis(1))
             .map(|_| ())
     }
 
-    /// Bis 32 Bytes ueber den Transferpuffer wie das Original (0x444c30): Fuellbefehle
-    /// 03/05/06/07/08/09 mit je 6 Bytes, dann 02 04 <lo> <hi> 00 <Laenge> 00 12.
+    /// Up to 32 bytes via the transfer buffer like the original (0x444c30): fill commands
+    /// 03/05/06/07/08/09 with 6 bytes each, then 02 04 <lo> <hi> 00 <length> 00 12.
     pub fn write_rom_block(&mut self, addr: u16, data: &[u8]) -> Result<()> {
         if !(1..=32).contains(&data.len()) {
             return invalid(tr!("error.block_size"));
@@ -482,7 +482,7 @@ impl<T: Transport> M6980X<T> {
         for (cmd, chunk) in ROM_FILL_CMDS.iter().zip(data.chunks(6)) {
             self.xfer(GROUP_ROM, *cmd, chunk, None, Duration::from_millis(1))?;
         }
-        // Wartezeit waechst mit der Laenge genau wie [ebp-4] im Original
+        // the wait grows with the length exactly like [ebp-4] in the original
         let delay_ms = match data.len() {
             0..=12 => 1,
             13..=18 => 3,
@@ -501,7 +501,7 @@ impl<T: Transport> M6980X<T> {
         .map(|_| ())
     }
 
-    /// Schreiben und pruefen. Bloecke ueberschreiten nie eine 32-Byte-Grenze.
+    /// Write and verify. Blocks never cross a 32-byte boundary.
     pub fn write_rom(&mut self, addr: u16, data: &[u8], bytewise: bool) -> Result<()> {
         if usize::from(addr) + data.len() > ROM_SIZE {
             return invalid(tr!("error.write_outside_rom"));
@@ -530,9 +530,9 @@ impl<T: Transport> M6980X<T> {
         Ok(())
     }
 
-    // -- obere Ebene: Funktionen und Makros (Formate in docs/PROTOCOL.md) ---------------------
-    /// Zurueck zur eingebauten Funktion der Taste. Das Original hat dafuer keine Option; geschrieben wird
-    /// der Zustand, den die Maus fuer unberuehrte Tasten meldet (Flags 00, Adresse FFFF).
+    // -- upper level: functions and macros (formats in docs/PROTOCOL.md) ----------------------
+    /// Back to the built-in function of the button. The original has no option for this; it writes
+    /// the state the mouse reports for untouched buttons (flags 00, address FFFF).
     pub fn reset_button(&mut self, profile: u8, button: u8) -> Result<()> {
         Self::check_button(profile, button)?;
         let active = self.active_profile()?;
@@ -544,8 +544,8 @@ impl<T: Transport> M6980X<T> {
         Ok(())
     }
 
-    /// Wie das Original: Funktionsdatensatz an seine feste Adresse (neu) schreiben, dann die Taste darauf legen.
-    /// Maustasten-Funktionen auf den Radtasten bekommen den Klick-Datensatz des Originals (functions::placement).
+    /// Like the original: (re)write the function record at its fixed address, then put the button on it.
+    /// Mouse button functions on the wheel buttons get the original's click record (functions::placement).
     pub fn assign_function(&mut self, profile: u8, button: u8, function: &Function) -> Result<()> {
         if function.size == 0 {
             return invalid(tr!("error.function_without_record", name = function.name()));
@@ -563,9 +563,9 @@ impl<T: Transport> M6980X<T> {
         self.set_button(profile, button, romlayout::macro_slot_addr(slot))
     }
 
-    /// Makro (Modusbyte + Ereignisse + 00) in einen Slot schreiben, dann seinen Info-Eintrag
-    /// (Bild-Byte, Name max. 9 Zeichen) - gleiche Reihenfolge wie das Original.
-    /// icon: Bild 1-100; None behaelt ein fuer diesen Slot schon gewaehltes Bild.
+    /// Write a macro (mode byte + events + 00) into a slot, then its info entry
+    /// (icon byte, name max. 9 characters) - same order as the original.
+    /// icon: icon 1-100; None keeps an icon already chosen for this slot.
     pub fn write_macro(&mut self, slot: usize, record: &[u8], name: &str, icon: Option<u8>) -> Result<()> {
         Self::check_slot(slot)?;
         if !(2..=romlayout::MACRO_SLOT_SIZE).contains(&record.len()) || record.last() != Some(&0x00) {
@@ -592,13 +592,13 @@ impl<T: Transport> M6980X<T> {
         self.write_rom(info, &padded, false)
     }
 
-    /// Wie "Freigeben" im Original: Byte 0 des Makronamens = 00, die Makrodaten bleiben.
+    /// Like "Release" in the original: byte 0 of the macro name = 00, the macro data stays.
     pub fn clear_macro(&mut self, slot: usize) -> Result<()> {
         Self::check_slot(slot)?;
         self.write_rom(romlayout::macro_info_addr(slot), &[0x00], true)
     }
 
-    /// "Freigeben" des Originals (Mitschnitt 4): alle Makronamen leeren, alle Tasten aller Profile auf Standard.
+    /// "Release" of the original (capture 4): clear all macro names, all buttons of all profiles to default.
     pub fn release_all(&mut self) -> Result<()> {
         for slot in 0..romlayout::MACRO_SLOTS {
             self.clear_macro(slot)?;
@@ -611,7 +611,7 @@ impl<T: Transport> M6980X<T> {
         Ok(())
     }
 
-    /// Nur das Bild-Byte wie "Change Icon" im Original (100 + n); None = kein Bild (Slot + 1).
+    /// Only the icon byte, like "Change Icon" in the original (100 + n); None = no icon (slot + 1).
     pub fn set_macro_icon(&mut self, slot: usize, icon: Option<u8>) -> Result<()> {
         Self::check_slot(slot)?;
         if let Some(icon) = icon {
@@ -626,7 +626,7 @@ impl<T: Transport> M6980X<T> {
         Ok(romlayout::macro_icon(&self.read_rom(romlayout::macro_info_addr(slot), romlayout::MACRO_INFO_SIZE)?))
     }
 
-    /// Die 20 Makronamen aus der Info-Tabelle.
+    /// The 20 macro names from the info table.
     pub fn macro_names(&mut self) -> Result<Vec<String>> {
         let table = self.read_rom(romlayout::MACRO_INFO_BASE, romlayout::MACRO_SLOTS * romlayout::MACRO_INFO_SIZE)?;
         Ok(romlayout::macro_names(&table))

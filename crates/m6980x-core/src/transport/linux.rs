@@ -1,4 +1,4 @@
-//! Linux: `/dev/hidraw*` direkt per ioctl (ohne hidapi), `flock` auf das Geraet als Sperre zwischen Prozessen.
+//! Linux: `/dev/hidraw*` directly via ioctl (without hidapi), `flock` on the device as a lock between processes.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::ErrorKind;
@@ -17,7 +17,7 @@ const IOC_READ: u64 = 2;
 pub const HIDIOCSFEATURE: u64 = ioc(IOC_WRITE | IOC_READ, b'H', 0x06, (REPORT_LEN + 1) as u64);
 pub const HIDIOCGFEATURE: u64 = ioc(IOC_WRITE | IOC_READ, b'H', 0x07, (REPORT_LEN + 1) as u64);
 
-/// /dev/hidrawN des Maus-Interfaces (USB-Interface 0).
+/// /dev/hidrawN of the mouse interface (USB interface 0).
 pub fn find_hidraw() -> Option<String> {
     let hid_id = format!("HID_ID=0003:{:08X}:{:08X}", VID as u32, PID as u32);
     let mut nodes: Vec<_> = fs::read_dir("/sys/class/hidraw").ok()?.flatten().map(|e| e.path()).collect();
@@ -29,7 +29,7 @@ pub fn find_hidraw() -> Option<String> {
         if !uevent.to_uppercase().contains(&hid_id) {
             continue;
         }
-        // .../3-2:1.0/0003:E0FF:0001.0007 -> das USB-Interface-Verzeichnis endet auf ".<ifnum>"
+        // .../3-2:1.0/0003:E0FF:0001.0007 -> the USB interface directory ends with ".<ifnum>"
         let Ok(real) = fs::canonicalize(node.join("device")) else {
             continue;
         };
@@ -64,7 +64,7 @@ impl HidrawTransport {
     }
 
     fn ioctl(&self, request: u64, buf: &mut [u8; REPORT_LEN + 1]) -> Result<usize> {
-        // SAFETY: buf ist so gross, wie die Groesse im Request-Code angibt.
+        // SAFETY: buf is as large as the size in the request code says.
         let n = unsafe { libc::ioctl(self.file.as_raw_fd(), request as _, buf.as_mut_ptr()) };
         if n < 0 {
             return Err(Error::Transport(std::io::Error::last_os_error().to_string()));
@@ -83,7 +83,7 @@ impl Transport for HidrawTransport {
     fn get_feature(&mut self) -> Result<[u8; REPORT_LEN]> {
         let mut buf = [0u8; REPORT_LEN + 1];
         let n = self.ioctl(HIDIOCGFEATURE, &mut buf)?;
-        // Die Maus liefert manchmal kurze Reports (z. B. beim Druecken der DPI-/Profiltaste) -> wie "busy" behandeln.
+        // The mouse sometimes returns short reports (e.g. while the DPI/profile button is pressed) -> treat like "busy".
         if n < REPORT_LEN {
             return Err(Error::Transport(format!("unexpected feature report length {n}")));
         }
@@ -93,7 +93,7 @@ impl Transport for HidrawTransport {
     fn lock(&mut self) -> Result<()> {
         let end = Instant::now() + Duration::from_millis(LOCK_TIMEOUT_MS as u64);
         loop {
-            // SAFETY: gueltiger Dateideskriptor.
+            // SAFETY: valid file descriptor.
             if unsafe { libc::flock(self.file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
                 self.locked = true;
                 return Ok(());
@@ -111,7 +111,7 @@ impl Transport for HidrawTransport {
 
     fn unlock(&mut self) {
         if self.locked {
-            // SAFETY: gueltiger Dateideskriptor.
+            // SAFETY: valid file descriptor.
             unsafe { libc::flock(self.file.as_raw_fd(), libc::LOCK_UN) };
             self.locked = false;
         }

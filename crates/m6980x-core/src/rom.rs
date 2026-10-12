@@ -1,12 +1,12 @@
-//! Aufbau des 8-KB-Onboard-ROMs (siehe docs/PROTOCOL.md; das Original rechnet genauso, 0x42ebd8).
+//! Layout of the 8 KB onboard ROM (see docs/PROTOCOL.md; the original computes the same, 0x42ebd8).
 //!
 //! ```text
-//!   0x0000-0x1CBF  20 Makro-Slots zu 0x170 Bytes (Slot n bei n * 0x170)
-//!   0x1CC1-0x1D88  Makro-Info-Tabelle, 20 Eintraege zu 10 Bytes (MacroInfoSize=10)
-//!   0x1D8C-0x1EEF  Funktionsdatensaetze an festen Adressen, inkl. der Klicks fuer die Radtasten (functions.rs)
-//!   0x1F00-0x1FFF  von der Firmware verwaltet: 0x1F00 = Marke 0x12; Tasten-Flags (80 belegt / 00 Standard)
-//!                  bei BUTTON_FLAGS + Profil * 12 + Taste; Tastenadressen bei
-//!                  BUTTON_TABLE + Profil * 0x18 + Taste * 2 (bleiben nach "Standard" stehen)
+//!   0x0000-0x1CBF  20 macro slots of 0x170 bytes (slot n at n * 0x170)
+//!   0x1CC1-0x1D88  macro info table, 20 entries of 10 bytes (MacroInfoSize=10)
+//!   0x1D8C-0x1EEF  function records at fixed addresses, incl. the clicks for the wheel buttons (functions.rs)
+//!   0x1F00-0x1FFF  managed by the firmware: 0x1F00 = marker 0x12; button flags (80 assigned / 00 default)
+//!                  at BUTTON_FLAGS + profile * 12 + button; button addresses at
+//!                  BUTTON_TABLE + profile * 0x18 + button * 2 (left in place after "default")
 //! ```
 
 use crate::tr;
@@ -19,30 +19,30 @@ pub const BUTTON_FLAGS: usize = 0x1F01;
 pub const BUTTON_FLAGS_STRIDE: usize = 12;
 pub const BUTTON_TABLE: usize = 0x1F3D;
 pub const BUTTON_TABLE_STRIDE: usize = 0x18;
-/// Namensbytes; Byte 9 des Eintrags ist das Bild-Byte.
+/// name bytes; byte 9 of the entry is the icon byte.
 pub const MACRO_NAME_LEN: usize = 9;
-/// Bild-Byte (Macro.exe 0x4133a0): neue Makros bekommen Slot + 1 (kein Bild, die GUI zeigt "MACRO n"),
-/// der Dialog "Change Icon" schreibt 100 + n fuer Bild n seines 100er-Rasters. Bild 1-40 sind in
-/// Macro.exe eingebettet, 41-100 kommen zur Laufzeit aus bmp\1.bmp ... bmp\60.bmp (leere Platzhalter).
-/// Bestaetigt: Toms "Klicker" (0x68) zeigt Bild 4.
+/// Icon byte (Macro.exe 0x4133a0): new macros get slot + 1 (no icon, the GUI shows "MACRO n"),
+/// the "Change Icon" dialog writes 100 + n for icon n of its grid of 100. Icons 1-40 are embedded in
+/// Macro.exe, 41-100 are loaded at runtime from bmp\1.bmp ... bmp\60.bmp (empty placeholders).
+/// Confirmed: Tom's "Klicker" (0x68) shows icon 4.
 pub const ICON_OFFSET: u8 = 100;
 pub const ICON_COUNT: u8 = 100;
 pub const ICONS_EMBEDDED: u8 = 40;
 
-/// Bildnummer 1-100 eines Makros oder None (kein Bild / Standard).
+/// Icon number 1-100 of a macro, or None (no icon / default).
 pub fn macro_icon(info: &[u8]) -> Option<u8> {
     let value = info.get(MACRO_NAME_LEN).copied().unwrap_or(0xFF);
     let n = value.wrapping_sub(ICON_OFFSET);
     (value >= ICON_OFFSET && (1..=ICON_COUNT).contains(&n)).then_some(n)
 }
 
-/// Herkunft von Bild n: im Original eingebettet oder eigene Datei bmp\<n-40>.bmp im Programmordner des Originals.
+/// Source of icon n: embedded in the original or a custom file bmp\<n-40>.bmp in the original's program folder.
 pub fn icon_source(n: u8) -> String {
     if (1..=ICONS_EMBEDDED).contains(&n) { tr!("icon.built_in") } else { tr!("icon.custom", n = n - ICONS_EMBEDDED) }
 }
 
-/// Datensatzadresse einer Taste in einem ROM-Abbild, None wenn das Flag "Standard" (00) sagt.
-/// Der Tabelleneintrag allein reicht nicht: die Firmware laesst ihn nach "Standard" stehen.
+/// Record address of a button in a ROM image, None if the flag says "default" (00).
+/// The table entry alone is not enough: the firmware leaves it in place after "default".
 pub fn button_assignment(rom: &[u8], profile: usize, button: usize) -> Option<u16> {
     if rom[BUTTON_FLAGS + profile * BUTTON_FLAGS_STRIDE + button] & 0x80 == 0 {
         return None;
@@ -82,12 +82,12 @@ pub fn macro_slot_of(addr: u16) -> Option<usize> {
     (addr < MACRO_SLOTS * MACRO_SLOT_SIZE && addr.is_multiple_of(MACRO_SLOT_SIZE)).then_some(addr / MACRO_SLOT_SIZE)
 }
 
-/// Bytes als Latin-1-Text (wie Pythons `decode("latin-1")`).
+/// Bytes as Latin-1 text (like Python `decode("latin-1")`).
 pub fn latin1(data: &[u8]) -> String {
     data.iter().map(|&c| c as char).collect()
 }
 
-/// Namensteil eines Info-Eintrags; geloeschte (FF) Eintraege haben keinen Namen.
+/// Name part of an info entry; erased (FF) entries have no name.
 pub fn macro_name(info: &[u8]) -> String {
     let raw = &info[..MACRO_NAME_LEN.min(info.len())];
     if is_erased(raw) {
@@ -96,7 +96,7 @@ pub fn macro_name(info: &[u8]) -> String {
     latin1(raw.split(|&c| c == 0).next().unwrap_or_default())
 }
 
-/// Alle 20 Makronamen aus der Info-Tabelle (MACRO_SLOTS * MACRO_INFO_SIZE Bytes ab MACRO_INFO_BASE).
+/// All 20 macro names from the info table (MACRO_SLOTS * MACRO_INFO_SIZE bytes from MACRO_INFO_BASE).
 pub fn macro_names(info_table: &[u8]) -> Vec<String> {
     info_table.chunks(MACRO_INFO_SIZE).take(MACRO_SLOTS).map(macro_name).collect()
 }
@@ -107,13 +107,13 @@ mod tests {
 
     #[test]
     fn picture_byte_and_source() {
-        let klicker_info = [0x4b, 0x6c, 0x69, 0x63, 0x6b, 0x65, 0x72, 0x00, 0x2c, 0x68]; // echt, von Tom bestaetigt
+        let klicker_info = [0x4b, 0x6c, 0x69, 0x63, 0x6b, 0x65, 0x72, 0x00, 0x2c, 0x68]; // real, confirmed by Tom
         assert_eq!(macro_icon(&klicker_info), Some(4));
         assert_eq!(macro_name(&klicker_info), "Klicker");
         assert_eq!(icon_source(4), "eingebaut");
         assert_eq!(icon_source(41), "eigenes bmp\\1.bmp");
         let mut new_macro = [0u8; 10];
-        new_macro[9] = 3; // neues Makro: Slot + 1
+        new_macro[9] = 3; // new macro: slot + 1
         assert_eq!(macro_icon(&new_macro), None);
         assert_eq!(macro_name(&[0xFF; 10]), "");
     }

@@ -1,9 +1,9 @@
-//! Komplette Sicherung/Wiederherstellung der Maus: das 8-KB-ROM plus die Einstellungen ausserhalb davon
-//! (aktives Profil, DPI-Stufen, aktive DPI-Stufe, LED-Farben, Abtastrate, Tastenbelegung).
+//! Full backup/restore of the mouse: the 8 KB ROM plus the settings outside of it
+//! (active profile, DPI stages, active DPI stage, LED colours, report rate, button assignment).
 //!
-//! Format: JSON, siehe docs/PROTOCOL.md. ROM-Bytes im Firmware-Bereich 0x1F00-0x1FFF werden nicht direkt
-//! geschrieben, ausser der Tastenadress-Tabelle, die die Firmware nach "Standard" stehen laesst.
-//! Dazu die Dateiformate des Originals: `.meb` (ROM-Sicherung) und Makro-`.ini` (Editor-Export).
+//! Format: JSON, see docs/PROTOCOL.md. ROM bytes in the firmware area 0x1F00-0x1FFF are not written
+//! directly, except the button address table, which the firmware leaves in place after "default".
+//! Plus the file formats of the original: `.meb` (ROM backup) and macro `.ini` (editor export).
 
 use std::collections::HashMap;
 use std::fs;
@@ -18,7 +18,7 @@ use crate::transport::Transport;
 use crate::{Error, Result, invalid, tr};
 
 pub const FORMAT: &str = "m6980x-configtool-backup";
-/// vor der Umbenennung (2026-10-11) geschrieben
+/// written before the rename (2026-10-11)
 pub const OLD_FORMATS: [&str; 1] = ["ghost-backup"];
 pub const VERSION: u32 = 1;
 pub const FIRMWARE_AREA: usize = 0x1F00;
@@ -43,7 +43,7 @@ pub struct Backup {
     pub dpi_stages: Vec<DpiValues>,
     pub led_colors: Vec<[u8; 3]>,
     pub buttons: Vec<Vec<Option<u16>>>,
-    /// ROM als Hex-Text ohne Leerzeichen
+    /// ROM as hex text without spaces
     pub rom: String,
 }
 
@@ -98,13 +98,13 @@ pub fn create<T: Transport>(g: &mut M6980X<T>, progress: &mut dyn FnMut(usize, u
     })
 }
 
-/// JSON mit Einrueckung 1 wie der Prototyp (`json.dump(..., indent=1)`).
+/// JSON with indent 1 like the prototype (`json.dump(..., indent=1)`).
 pub fn to_json(data: &Backup) -> String {
     let mut out = Vec::new();
     let fmt = serde_json::ser::PrettyFormatter::with_indent(b" ");
     let mut ser = serde_json::Serializer::with_formatter(&mut out, fmt);
-    data.serialize(&mut ser).expect("Serialisierung in den Speicher");
-    String::from_utf8(out).expect("JSON ist UTF-8")
+    data.serialize(&mut ser).expect("serialising into memory");
+    String::from_utf8(out).expect("JSON is UTF-8")
 }
 
 pub fn save(data: &Backup, path: impl AsRef<Path>) -> Result<()> {
@@ -139,17 +139,17 @@ pub fn load(path: impl AsRef<Path>) -> Result<Backup> {
 
 fn latin1_lines(path: &Path) -> Result<Vec<String>> {
     let text: String = fs::read(path)?.iter().map(|&c| c as char).collect();
-    // wie Pythons Textmodus: \r\n, \r und \n beenden eine Zeile
+    // like Python text mode: \r\n, \r and \n end a line
     Ok(text.replace("\r\n", "\n").replace('\r', "\n").lines().map(str::to_string).collect())
 }
 
-/// Wie Pythons `str.strip()` fuer die hier vorkommenden Zeichen.
+/// Like Python `str.strip()` for the characters that occur here.
 fn py_strip(s: &str) -> &str {
     s.trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c))
 }
 
-/// Sicherungsdatei des Originals ("Backup all data to file"): INI-Abschnitt [Mem], count=8192,
-/// dann eine Zeile '<Adresse>=<Dezimalwert>' pro Byte. Enthaelt nur das 8-KB-ROM.
+/// Backup file of the original ("Backup all data to file"): INI section [Mem], count=8192,
+/// then one line '<address>=<decimal value>' per byte. Contains only the 8 KB ROM.
 pub fn read_meb(path: impl AsRef<Path>) -> Result<Vec<u8>> {
     let bad = || Error::Invalid(tr!("backup.bad_meb_file"));
     let mut values: HashMap<usize, i64> = HashMap::new();
@@ -181,15 +181,15 @@ fn ini_bytes(section: &str, data: &[u8]) -> Vec<u8> {
     text.into_bytes()
 }
 
-/// Bytegleich mit den Dateien, die das Original schreibt (CRLF-Zeilenenden).
+/// Byte-identical with the files the original writes (CRLF line endings).
 pub fn write_meb(rom: &[u8], path: impl AsRef<Path>) -> Result<()> {
     fs::write(path, ini_bytes("Mem", rom))?;
     Ok(())
 }
 
-/// Makro-Exportdatei des Editors im Original (0x4148a0): TIniFile, Abschnitt [Macro], count=<Bytes>,
-/// dann '<Index>=<Byte dezimal>' fuer den rohen Datensatz (Modusbyte, Ereignisse, 00). Der Name wird nicht
-/// gespeichert. Wie im Original wird ein leeres Makro (nur Modus + 00) nicht exportiert.
+/// Macro export file of the original's editor (0x4148a0): TIniFile, section [Macro], count=<bytes>,
+/// then '<index>=<byte decimal>' for the raw record (mode byte, events, 00). The name is not
+/// stored. Like the original, an empty macro (only mode + 00) is not exported.
 pub fn write_macro_ini(record: &[u8], path: impl AsRef<Path>) -> Result<()> {
     if record.len() <= 2 {
         return invalid(tr!("backup.empty_macro"));
@@ -198,8 +198,8 @@ pub fn write_macro_ini(record: &[u8], path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
-/// Makro-Exportdatei des Originals lesen (Import 0x418408): liefert die Datensatzbytes, abgeschnitten an der
-/// 00-Endmarke. [SpecialMacro] index != 0 laesst das Original nur das Modusbyte behalten (0x415df8).
+/// Read a macro export file of the original (import 0x418408): returns the record bytes, cut at the
+/// 00 end mark. [SpecialMacro] index != 0 makes the original keep only the mode byte (0x415df8).
 pub fn read_macro_ini(path: impl AsRef<Path>, max_size: usize) -> Result<Vec<u8>> {
     let mut sections: HashMap<String, HashMap<String, String>> = HashMap::new();
     let mut current: Option<String> = None;
@@ -213,7 +213,7 @@ pub fn read_macro_ini(path: impl AsRef<Path>, max_size: usize) -> Result<Vec<u8>
             sections.get_mut(sec).unwrap().insert(py_strip(key).to_lowercase(), py_strip(value).to_string());
         }
     }
-    // wie TIniFile.ReadInteger mit Standardwert 0
+    // like TIniFile.ReadInteger with default 0
     let number = |section: &str, key: &str| -> i64 {
         sections.get(section).and_then(|s| s.get(key)).and_then(|v| v.parse().ok()).unwrap_or(0)
     };
@@ -228,7 +228,7 @@ pub fn read_macro_ini(path: impl AsRef<Path>, max_size: usize) -> Result<Vec<u8>
     if number("specialmacro", "index") != 0 {
         return Ok(vec![data[0], 0x00]);
     }
-    // laeuft die Ereignisse ab: 00 kommt auch in Argumenten vor
+    // walk the events: 00 also occurs in arguments
     let length = fnc::record_length(&data);
     if data[length - 1] == fnc::EV_END {
         Ok(data[..length].to_vec())
@@ -239,7 +239,7 @@ pub fn read_macro_ini(path: impl AsRef<Path>, max_size: usize) -> Result<Vec<u8>
     }
 }
 
-/// .meb (Format des Originals) oder rohe 8-KB-.bin-Datei laden.
+/// Load a .meb (format of the original) or a raw 8 KB .bin file.
 pub fn load_rom_file(path: impl AsRef<Path>) -> Result<Vec<u8>> {
     let path = path.as_ref();
     if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("meb")) {
@@ -252,7 +252,7 @@ pub fn load_rom_file(path: impl AsRef<Path>) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-/// Zusammenhaengende Bereiche [start, ende] (inklusive), in denen sich current und wanted unterscheiden.
+/// Contiguous ranges [start, end] (inclusive) in which current and wanted differ.
 pub fn diff_runs(current: &[u8], wanted: &[u8], start: usize, end: usize) -> Vec<(usize, usize)> {
     let mut runs: Vec<(usize, usize)> = Vec::new();
     for i in start..end {
@@ -273,10 +273,10 @@ fn set_or_reset<T: Transport>(g: &mut M6980X<T>, p: u8, b: u8, target: Option<u1
     }
 }
 
-/// ROM-Abbild schreiben (z. B. aus einer .meb-Datei): alles unterhalb des Firmware-Bereichs und die Tastentabelle,
-/// dann die Tastenbelegung aus dem Abbild (Flags 0x1F01 + Tabelle) per 01 85, wie restore() es macht.
-/// Das Original schreibt beim Wiederherstellen alle 256 Seiten neu; hier nur, was abweicht.
-/// Liefert die verbleibenden Abweichungen.
+/// Write a ROM image (e.g. from a .meb file): everything below the firmware area and the button table,
+/// then the button assignment from the image (flags 0x1F01 + table) via 01 85, as restore() does.
+/// When restoring, the original rewrites all 256 pages; here only what differs.
+/// Returns the remaining differences.
 pub fn import_rom<T: Transport>(
     g: &mut M6980X<T>,
     wanted: &[u8],
@@ -312,7 +312,7 @@ pub fn import_rom<T: Transport>(
     Ok(diff_runs(&fin, wanted, 0, ROM_SIZE))
 }
 
-/// Alles zurueckschreiben, was abweicht; liefert die verbleibenden Abweichungen (Firmware-Bereich).
+/// Write back everything that differs; returns the remaining differences (firmware area).
 pub fn restore<T: Transport>(
     g: &mut M6980X<T>,
     data: &Backup,

@@ -1,4 +1,4 @@
-//! Port von prototype/python/tests/test_protocol.py, test_backup.py und test_cli.py (Geraetelogik).
+//! Port of prototype/python/tests/test_protocol.py, test_backup.py and test_cli.py (device logic).
 
 use std::time::Duration;
 
@@ -35,7 +35,7 @@ fn is_device<T: std::fmt::Debug>(r: Result<T>) -> bool {
     matches!(r, Err(Error::Device(_)))
 }
 
-/// Schreibbefehle: Register mit Bit 0x80 oder ROM-Befehle ausser Lesen.
+/// Write commands: registers with bit 0x80 or ROM commands other than read.
 fn writes(sent: &[[u8; 8]]) -> Vec<String> {
     sent.iter().filter(|p| p[1] & 0x80 != 0 || p[0] == 0x02 && p[1] != 0).map(|p| hex(p)).collect()
 }
@@ -51,7 +51,7 @@ fn identify_and_name() {
 
 #[test]
 fn model_like_original() {
-    assert_eq!(model_of(&h("0c 12 09 2d 00 03 01")), Some("6980X")); // Toms Maus
+    assert_eq!(model_of(&h("0c 12 09 2d 00 03 01")), Some("6980X")); // Tom's mouse
     assert_eq!(model_of(&h("0c 12 07 2d 00 05 01")), Some("M8000X"));
     assert_eq!(model_of(&h("0c 12 09 2d 00 03 00")), Some("6980"));
     assert_eq!(model_of(&h("0c 12 09 2d 00 05 04")), Some("M8600"));
@@ -126,7 +126,7 @@ fn write_rom_block_matches_original_capture() {
 fn write_rom_splits_at_32_byte_boundaries() {
     let mut g = mouse();
     let data: Vec<u8> = (0..40).collect();
-    g.write_rom(0x1D90, &data, false).unwrap(); // 0x1D90-0x1D9F, dann 0x1DA0-0x1DB7
+    g.write_rom(0x1D90, &data, false).unwrap(); // 0x1D90-0x1D9F, then 0x1DA0-0x1DB7
     let commits: Vec<(u16, u8)> =
         g.t.sent
             .iter()
@@ -150,7 +150,7 @@ fn assign_function_writes_record_then_button() {
 fn speed_function_uses_original_2_byte_write() {
     let mut g = mouse();
     g.assign_function(2, 3, by_key("speed-2x").unwrap()).unwrap();
-    // identisch mit dem Mitschnitt der Original-Software (Profil 3, hintere Seitentaste)
+    // identical to the capture of the original software (profile 3, rear side button)
     assert_eq!(writes(&g.t.sent)[..2], ["02 02 c4 1e 00 c8 00 12", "01 85 02 03 80 c4 1e 12"]);
 }
 
@@ -180,7 +180,7 @@ fn assign_unknown_function_is_refused() {
 #[test]
 fn write_macro_like_original() {
     let mut g = mouse();
-    let record = h("04 83 17 00"); // "Hallo-Wel" aus dem Mitschnitt
+    let record = h("04 83 17 00"); // "Hallo-Wel" from the capture
     g.write_macro(2, &record, "Hallo-Wel", None).unwrap();
     assert_eq!(g.t.rom[0x02E0..0x02E4], record);
     assert_eq!(&g.t.rom[0x1CD5..0x1CDF], b"Hallo-Wel\x03");
@@ -200,8 +200,8 @@ fn write_macro_like_original() {
 #[test]
 fn write_macro_keeps_chosen_picture() {
     let mut g = mouse();
-    let info9 = 0x1CC1 + 9; // Bild-Byte Slot 0
-    g.t.rom[info9] = 0x68; // "Klicker" hat auf der echten Maus Bild 4
+    let info9 = 0x1CC1 + 9; // icon byte slot 0
+    g.t.rom[info9] = 0x68; // "Klicker" has icon 4 on the real mouse
     g.write_macro(0, &h("06 21 41 00"), "Klicker", None).unwrap();
     assert_eq!(g.t.rom[info9], 0x68);
     assert_eq!(g.macro_icon(0).unwrap(), Some(4));
@@ -212,7 +212,7 @@ fn write_macro_with_picture_and_reset() {
     let mut g = mouse();
     g.write_macro(5, &h("04 83 04 84 04 00"), "Test", Some(21)).unwrap();
     assert_eq!(g.t.rom[0x1CC1 + 5 * 10 + 9], 100 + 21);
-    g.set_macro_icon(5, None).unwrap(); // wie ein neues Makro: Slot + 1
+    g.set_macro_icon(5, None).unwrap(); // like a new macro: slot + 1
     assert_eq!(g.t.rom[0x1CC1 + 5 * 10 + 9], 6);
     assert_eq!(g.macro_icon(5).unwrap(), None);
     assert!(is_invalid(g.set_macro_icon(5, Some(101))));
@@ -224,19 +224,19 @@ fn clear_macro_like_original_release() {
     g.write_macro(2, &h("04 83 17 00"), "Hallo-Wel", None).unwrap();
     g.t.sent.clear();
     g.clear_macro(2).unwrap();
-    // Mitschnitt 4 ("Freigeben"): 02 01 d5 1c 00 00 00 12
+    // capture 4 ("Release"): 02 01 d5 1c 00 00 00 12
     assert!(g.t.sent.contains(&pkt("02 01 d5 1c 00 00 00 12")));
     assert_eq!(g.t.rom[0x1CD5], 0);
-    assert_eq!(g.t.rom[0x02E0..0x02E4], h("04 83 17 00")); // Daten bleiben
+    assert_eq!(g.t.rom[0x02E0..0x02E4], h("04 83 17 00")); // data stays
 }
 
 #[test]
 fn write_macro_rejects_bad_input() {
     let mut g = mouse();
-    assert!(is_invalid(g.write_macro(0, &h("04 83 17"), "x", None))); // keine Endmarke
-    assert!(is_invalid(g.write_macro(0, &h("04 00"), "zehnzeichn", None))); // Name zu lang
+    assert!(is_invalid(g.write_macro(0, &h("04 83 17"), "x", None))); // no end mark
+    assert!(is_invalid(g.write_macro(0, &h("04 00"), "zehnzeichn", None))); // name too long
     assert!(is_invalid(g.write_macro(20, &h("04 00"), "x", None)));
-    assert!(is_invalid(g.write_macro(0, &h("04 00"), "€", None))); // kein Latin-1
+    assert!(is_invalid(g.write_macro(0, &h("04 00"), "€", None))); // not Latin-1
     assert!(g.t.sent.is_empty());
 }
 
@@ -295,7 +295,7 @@ fn set_led_color_sends_original_packet_and_verifies() {
     g.set_led_color(1, [2, 0, 1]).unwrap();
     assert_eq!(g.t.sent[0], pkt("01 86 01 02 00 01 00 00"));
     assert_eq!(g.led_color(1).unwrap(), [2, 0, 1]);
-    assert!(!g.t.sent.iter().any(|p| p[..2] == [0x01, 0x88])); // kein Profilwechsel
+    assert!(!g.t.sent.iter().any(|p| p[..2] == [0x01, 0x88])); // no profile switch
 }
 
 #[test]
@@ -321,7 +321,7 @@ fn dpi_plan_matches_original_capture() {
     assert_eq!(dpi_write_plan(65, 65, &steps).unwrap(), [(0, 56, 65, 56), (1, 56, 65, 56)]);
     assert_eq!(dpi_write_plan(67, 67, &steps).unwrap(), [(0, 56, 67, 56), (1, 56, 67, 56)]);
     assert_eq!(dpi_write_plan(18, 42, &steps).unwrap(), [(0, 18, 1, 1), (1, 42, 1, 1)]);
-    // nicht unterstuetzter Schritt: naechsthoeherer, Bruch gekuerzt (30/32 -> 15/16)
+    // unsupported step: next higher one, fraction reduced (30/32 -> 15/16)
     assert_eq!(dpi_write_plan(30, 30, &[16, 32]).unwrap()[0], (0, 32, 15, 16));
 }
 
@@ -329,8 +329,8 @@ fn dpi_plan_matches_original_capture() {
 fn dpi_rounding_like_python() {
     assert_eq!(dpi_to_steps(4510, 90).unwrap(), 50);
     assert_eq!(dpi_to_steps(3000, 90).unwrap(), 33);
-    assert_eq!(dpi_to_steps(4545, 90).unwrap(), 50); // 50.5 -> gerade
-    assert_eq!(dpi_to_steps(4635, 90).unwrap(), 52); // 51.5 -> gerade
+    assert_eq!(dpi_to_steps(4545, 90).unwrap(), 50); // 50.5 -> even
+    assert_eq!(dpi_to_steps(4635, 90).unwrap(), 52); // 51.5 -> even
     assert!(dpi_to_steps(45, 90).is_err()); // 0.5 -> 0
 }
 
@@ -349,9 +349,9 @@ fn set_dpi_sends_original_packets_and_verifies() {
 #[test]
 fn set_dpi_separate_axes_and_rounding() {
     let mut g = mouse();
-    let stage = g.set_dpi(3, 4510, Some(3000)).unwrap(); // gerundet auf 50 / 33 Schritte zu 90
+    let stage = g.set_dpi(3, 4510, Some(3000)).unwrap(); // rounded to 50 / 33 steps of 90
     assert_eq!((stage.x_dpi(), stage.y_dpi()), (4500, 2970));
-    assert_eq!(g.dpi_stage(0).unwrap().x_dpi(), 1620); // andere Stufen unberuehrt
+    assert_eq!(g.dpi_stage(0).unwrap().x_dpi(), 1620); // other stages untouched
 }
 
 #[test]
@@ -390,7 +390,7 @@ impl Transport for FlakyMouse {
     fn get_feature(&mut self) -> Result<[u8; REPORT_LEN]> {
         self.reads += 1;
         if self.reads % 2 == 1 {
-            // jeder zweite Lesezugriff scheitert wie der echte kurze Report
+            // every second read fails like the real short report
             return Err(Error::Transport("unexpected feature report length 1: 00".into()));
         }
         self.inner.get_feature()
@@ -414,7 +414,7 @@ fn timeout_when_never_done() {
     assert!(is_device(g.name()));
 }
 
-/// Zaehlt lock/unlock, damit jeder Befehl genau einmal gesperrt und wieder freigegeben wird.
+/// Counts lock/unlock so that every command is locked and released exactly once.
 struct LockCounting {
     inner: FakeMouse,
     locks: u32,
@@ -443,12 +443,12 @@ fn every_command_runs_under_the_lock() {
     g.set_active_profile(1).unwrap();
     g.t.inner.busy_polls = 10_000;
     g.busy_tries = 2;
-    assert!(g.name().is_err()); // auch bei Fehler wieder freigegeben
+    assert!(g.name().is_err()); // released even on error
     assert_eq!(g.t.locks, 3);
     assert_eq!(g.t.unlocks, 3);
 }
 
-// -- Werkswerte (test_cli.py) -------------------------------------------------------------
+// -- factory values (test_cli.py) ---------------------------------------------------------
 
 #[test]
 fn dpi_and_500_hz_like_original_default_button() {
@@ -460,7 +460,7 @@ fn dpi_and_500_hz_like_original_default_button() {
     assert!(g.t.sent.iter().any(|p| p[..3] == [0x01, 0x8B, 0x02]));
 }
 
-// -- Sicherung (test_backup.py) -----------------------------------------------------------
+// -- backup (test_backup.py) --------------------------------------------------------------
 
 fn quiet() -> impl FnMut(&str) {
     |_| {}
@@ -472,7 +472,7 @@ fn round_trip_restores_everything() {
     let snap = backup::create(&mut g, &mut |_, _| {}).unwrap();
     let rom_before = g.t.rom.clone();
 
-    // von allem etwas aendern, wie es ein Werksreset oder Experimente tun
+    // change a bit of everything, like a factory reset or experiments do
     g.write_macro(3, &h("04 83 04 84 04 00"), "Test", Some(7)).unwrap();
     g.assign_function(1, 3, by_key("kopieren").unwrap()).unwrap();
     g.reset_button(0, 4).unwrap();
@@ -519,16 +519,16 @@ fn meb_round_trip_and_import() {
 
 #[test]
 fn meb_import_applies_button_assignments() {
-    // wie das Wiederherstellen im Original: Flags 0x1F01 + p*12 + b entscheiden, der Tabelleneintrag liefert die Adresse
+    // like restoring in the original: flags 0x1F01 + p*12 + b decide, the table entry gives the address
     let mut g = mouse();
     let mut wanted = g.t.rom.clone();
-    wanted[0x1F01..0x1F25].fill(0); // alles Standard ...
-    wanted[0x1F01 + 2 * 12 + 3] = 0x80; // ... ausser Profil 3, hintere Taste
+    wanted[0x1F01..0x1F25].fill(0); // all default ...
+    wanted[0x1F01 + 2 * 12 + 3] = 0x80; // ... except profile 3, rear button
     let a = 0x1F3D + 2 * 0x18 + 3 * 2;
-    wanted[a..a + 2].copy_from_slice(&0x1D98u16.to_le_bytes()); // -> Mittelklick
+    wanted[a..a + 2].copy_from_slice(&0x1D98u16.to_le_bytes()); // -> middle click
     let stale = 0x1F3D + 4 * 2;
-    wanted[stale..stale + 2].copy_from_slice(&0u16.to_le_bytes()); // alter Eintrag, Flag 00 -> bleibt Standard
-    assert_eq!(g.button(0, 4).unwrap(), Some(0x1D98)); // FakeMouse startet damit belegt
+    wanted[stale..stale + 2].copy_from_slice(&0u16.to_le_bytes()); // old entry, flag 00 -> stays default
+    assert_eq!(g.button(0, 4).unwrap(), Some(0x1D98)); // FakeMouse starts with this assigned
     backup::import_rom(&mut g, &wanted, &mut quiet()).unwrap();
     assert_eq!(g.button(2, 3).unwrap(), Some(0x1D98));
     assert_eq!(g.button(0, 4).unwrap(), None);
@@ -559,7 +559,7 @@ fn macro_ini_writes_original_layout() {
 #[test]
 fn macro_ini_round_trip_keeps_zero_inside_events() {
     let path = temp_dir("ini2").join("XY.ini");
-    let record = h("05 85 e9 00 85 00 00 89 00 01 21 41 00"); // 00 in Consumer-/Warte-Argumenten
+    let record = h("05 85 e9 00 85 00 00 89 00 01 21 41 00"); // 00 in consumer/wait arguments
     backup::write_macro_ini(&record, &path).unwrap();
     assert_eq!(backup::read_macro_ini(&path, 368).unwrap(), record);
 }
@@ -567,11 +567,11 @@ fn macro_ini_round_trip_keeps_zero_inside_events() {
 #[test]
 fn macro_ini_reads_like_original() {
     let path = temp_dir("ini3").join("XY.ini");
-    // Schluessel ohne Gross-/Kleinschreibung, Bytes nach 00 ignoriert, Endmarke nicht doppelt
+    // keys case-insensitive, bytes after 00 ignored, end mark not doubled
     std::fs::write(&path, "[MACRO]\nCount=5\n0=6\n1=33\n2=65\n3=0\n4=255\n").unwrap();
     assert_eq!(backup::read_macro_ini(&path, 368).unwrap(), h("06 21 41 00"));
     std::fs::write(&path, "[Macro]\ncount=3\n0=4\n1=97\n2=127\n[SpecialMacro]\nindex=2\n").unwrap();
-    assert_eq!(backup::read_macro_ini(&path, 368).unwrap(), h("04 00")); // Original behaelt nur den Modus
+    assert_eq!(backup::read_macro_ini(&path, 368).unwrap(), h("04 00")); // the original keeps only the mode
 }
 
 #[test]
@@ -584,16 +584,16 @@ fn macro_ini_rejects_empty_and_foreign_files() {
     }
 }
 
-/// Vorhandene Sicherungen des Prototyps lesen: `M6980X_BACKUP_DIR=<Ordner> cargo test -- --ignored`
+/// Read existing backups of the prototype: `M6980X_BACKUP_DIR=<folder> cargo test -- --ignored`
 #[test]
 #[ignore]
 fn loads_existing_backups() {
-    let dir = std::env::var("M6980X_BACKUP_DIR").expect("M6980X_BACKUP_DIR setzen");
+    let dir = std::env::var("M6980X_BACKUP_DIR").expect("set M6980X_BACKUP_DIR");
     let mut n = 0;
     for entry in std::fs::read_dir(dir).unwrap().flatten() {
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "json") {
-            // nur Sicherungen dieses Tools (nicht z. B. die Info-Ausgabe einstellungen_vor_originalsoftware.json)
+            // only backups of this tool (not e.g. the info output einstellungen_vor_originalsoftware.json)
             if !std::fs::read_to_string(&path).unwrap().contains("\"format\"") {
                 continue;
             }

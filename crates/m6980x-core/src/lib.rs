@@ -1,7 +1,7 @@
-//! M6980X Configuration Tool - Kernbibliothek fuer die Gigabyte GHOST M6980X (USB `E0FF:0001`).
+//! M6980X Configuration Tool - core library for the Gigabyte GHOST M6980X (USB `E0FF:0001`).
 //!
-//! Port des Python-Prototyps (`prototype/python/m6980x_configtool`); die Belege zu jedem Befehl
-//! stehen in `docs/PROTOCOL.md`.
+//! Port of the Python prototype (`prototype/python/m6980x_configtool`); the evidence for every command
+//! is in `docs/PROTOCOL.md`.
 
 pub mod backup;
 pub mod functions;
@@ -17,7 +17,7 @@ pub mod fake;
 pub use protocol::{DpiStage, Identify, M6980X};
 pub use transport::{Transport, open_transport};
 
-/// Fehlerarten wie im Prototyp: `Device` = M6980XError, `Transport` = TransportError, `Invalid` = ValueError.
+/// Error kinds as in the prototype: `Device` = M6980XError, `Transport` = TransportError, `Invalid` = ValueError.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0}")]
@@ -36,7 +36,7 @@ pub(crate) fn invalid<T>(msg: impl Into<String>) -> Result<T> {
     Err(Error::Invalid(msg.into()))
 }
 
-/// Bytes als "0c 12 09" (wie Pythons `bytes.hex(" ")`).
+/// Bytes as "0c 12 09" (like Python `bytes.hex(" ")`).
 pub fn hex(data: &[u8]) -> String {
     data.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ")
 }

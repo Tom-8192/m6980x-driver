@@ -1,4 +1,4 @@
-//! Namen und Anzeigetexte, die Kommandozeile und Oberflaeche teilen (im Prototyp in cli.py).
+//! Names and display texts shared by command line and GUI (in the prototype in cli.py).
 
 use crate::functions as fnc;
 use crate::i18n::{self, fold};
@@ -6,10 +6,10 @@ use crate::protocol::{BUTTONS, LED_LEVELS};
 use crate::rom as romlayout;
 use crate::{Result, invalid, tr};
 
-/// Kanalstufen: 0 = aus, 1 = halb, 2 = voll. (Kennung, RGB); der Anzeigename steht in locales/ unter `led.<Kennung>`.
-/// Reihenfolge zaehlt: bei gleichen Werten gewinnt der erste Name.
+/// Channel levels: 0 = off, 1 = half, 2 = full. (id, RGB); the display name is in locales/ under `led.<id>`.
+/// Order matters: for equal values the first name wins.
 pub const LED_COLORS: [(&str, [u8; 3]); 15] = [
-    // die 8 Farben der Farbauswahl im Original (Macro.exe 0x451000-0x45115e)
+    // the 8 colours of the original's colour picker (Macro.exe 0x451000-0x45115e)
     ("off", [0, 0, 0]),
     ("blue", [0, 0, 2]),
     ("green", [0, 2, 0]),
@@ -18,7 +18,7 @@ pub const LED_COLORS: [(&str, [u8; 3]); 15] = [
     ("purple", [2, 0, 1]),
     ("yellow", [2, 1, 0]),
     ("red", [2, 0, 0]),
-    // weitere Kombinationen, die die Maus annimmt
+    // further combinations the mouse accepts
     ("white", [2, 2, 2]),
     ("magenta", [2, 0, 2]),
     ("light-yellow", [2, 2, 0]),
@@ -28,7 +28,7 @@ pub const LED_COLORS: [(&str, [u8; 3]); 15] = [
     ("orange", [2, 1, 0]),
 ];
 
-/// (Name in der aktuellen Sprache, RGB) aller Farbvorlagen.
+/// (name in the current language, RGB) of all colour presets.
 pub fn led_names() -> Vec<(String, [u8; 3])> {
     LED_COLORS.iter().map(|(id, rgb)| (i18n::name(&format!("led.{id}")), *rgb)).collect()
 }
@@ -54,15 +54,15 @@ pub fn parse_led<S: AsRef<str>>(values: &[S]) -> Result<[u8; 3]> {
         return Ok(*rgb);
     }
     if values.len() == 3 && values.iter().all(|v| matches!(v.as_ref(), "0" | "1" | "2")) {
-        let p = |i: usize| values[i].as_ref().parse::<u8>().expect("geprueft");
+        let p = |i: usize| values[i].as_ref().parse::<u8>().expect("checked");
         return Ok([p(0), p(1), p(2)]);
     }
     let names: Vec<String> = led_names().into_iter().map(|(n, _)| n).collect();
     invalid(tr!("names.colour_syntax", names = names.join(", ")))
 }
 
-/// Geraetetastennummern, an der Maus ermittelt (jede Taste hat ihre Nummer getippt); 5 hat keine Taste.
-/// (Nummer, Kennung); Anzeigename in locales/ unter `button.<Kennung>`.
+/// Device button numbers, found on the mouse (each button typed its number); 5 has no button.
+/// (number, id); display name in locales/ under `button.<id>`.
 pub const BUTTON_IDS: [(u8, &str); 9] = [
     (0, "left"),
     (1, "right"),
@@ -75,7 +75,7 @@ pub const BUTTON_IDS: [(u8, &str); 9] = [
     (9, "wheel-down"),
 ];
 
-/// (Nummer, Name in der aktuellen Sprache) aller belegbaren Tasten.
+/// (number, name in the current language) of all assignable buttons.
 pub fn button_names() -> Vec<(u8, String)> {
     BUTTON_IDS.iter().map(|(b, id)| (*b, i18n::name(&format!("button.{id}")))).collect()
 }
@@ -84,8 +84,8 @@ pub fn button_name(button: u8) -> Option<String> {
     BUTTON_IDS.iter().find(|(b, _)| *b == button).map(|(_, id)| i18n::name(&format!("button.{id}")))
 }
 
-/// Eingebaute Funktion ("Standard") jeder Taste 0-9, aus den Input-Reports der Maus gemessen (2026-10-11);
-/// Texte in locales/ unter `button_action.<Nummer>`.
+/// Built-in function ("default") of every button 0-9, measured from the mouse input reports (2026-10-11);
+/// texts in locales/ under `button_action.<number>`.
 pub fn standard_label(button: Option<u8>) -> String {
     match button.filter(|&b| usize::from(b) < BUTTONS) {
         Some(b) => tr!("names.default_of", action = tr!(&format!("button_action.{b}"))),
@@ -93,7 +93,7 @@ pub fn standard_label(button: Option<u8>) -> String {
     }
 }
 
-/// Zielwort fuer "zurueck auf die eingebaute Funktion" (Kommandozeile), in jeder Sprache.
+/// Target word for "back to the built-in function" (command line), in any language.
 pub fn is_standard_word(text: &str) -> bool {
     matches!(fold(text).as_str(), "standard" | "default") || i18n::matches("names.default", text)
 }
@@ -116,7 +116,7 @@ pub fn parse_button(text: &str) -> Result<u8> {
     invalid(tr!("names.button_syntax", buttons = BUTTONS - 1, names = names.join(", ")))
 }
 
-/// Pythons `repr()` fuer kurze Namen: 'Klicker'.
+/// Python `repr()` for short names: 'Klicker'.
 pub fn py_repr(text: &str) -> String {
     let quote = if text.contains('\'') && !text.contains('"') { '"' } else { '\'' };
     let mut out = String::from(quote);
@@ -158,7 +158,7 @@ pub fn describe_target(addr: Option<u16>, names: &[String], button: Option<u8>) 
     }
 }
 
-/// Abtastraten: (Hz, Intervall ms) - 1000, 500, 333, 250, 200, 166, 142, 125 Hz.
+/// Report rates: (Hz, interval ms) - 1000, 500, 333, 250, 200, 166, 142, 125 Hz.
 pub fn rates() -> Vec<(u32, u8)> {
     (1..=8u8).map(|ms| (rate_hz(ms), ms)).collect()
 }
@@ -196,8 +196,8 @@ mod tests {
     fn parse_names_and_levels() {
         assert_eq!(parse_led(&["Rot"]).unwrap(), [2, 0, 0]);
         assert_eq!(parse_led(&["0", "1", "2"]).unwrap(), [0, 1, 2]);
-        assert_eq!(parse_led(&["Light-Blue"]).unwrap(), [0, 2, 2]); // englische Namen gehen immer
-        assert_eq!(parse_led(&["gruen"]).unwrap(), parse_led(&["Grün"]).unwrap()); // mit und ohne Umlaut
+        assert_eq!(parse_led(&["Light-Blue"]).unwrap(), [0, 2, 2]); // English names always work
+        assert_eq!(parse_led(&["gruen"]).unwrap(), parse_led(&["Grün"]).unwrap()); // with and without umlaut
     }
 
     #[test]

@@ -1,7 +1,7 @@
-//! Tastenfunktionen, Tastencodes und das Makro-Ereignisformat der GHOST M6980X.
+//! Button functions, key codes and the macro event format of the GHOST M6980X.
 //!
-//! Funktionsdatensaetze liegen an festen ROM-Adressen: 0x1D8C + Summe der Groessen aller frueheren
-//! Eintraege aus Mappingdefault.ini [List]/[ListMemSize] (fuer 5 Funktionen belegt, siehe docs/PROTOCOL.md).
+//! Function records live at fixed ROM addresses: 0x1D8C + sum of the sizes of all earlier
+//! entries from Mappingdefault.ini [List]/[ListMemSize] (proven for 5 functions, see docs/PROTOCOL.md).
 
 use std::sync::LazyLock;
 
@@ -13,7 +13,7 @@ pub const FUNCTION_BASE: u16 = 0x1D8C;
 pub const MODE_ONCE: u8 = 0x04;
 pub const MODE_LOOP: u8 = 0x05;
 pub const MODE_HOLD: u8 = 0x06;
-/// (Kennung, Modusbyte); Namen in locales/ unter `mode.<Kennung>`
+/// (id, mode byte); names in locales/ under `mode.<id>`
 pub const MODES: [(&str, u8); 3] = [("once", MODE_ONCE), ("loop", MODE_LOOP), ("fire", MODE_HOLD)];
 
 pub const EV_END: u8 = 0x00;
@@ -22,45 +22,45 @@ pub const EV_KEY_UP: u8 = 0x84;
 pub const EV_CONSUMER: u8 = 0x85;
 pub const EV_WAIT8: u8 = 0x88;
 pub const EV_WAIT16: u8 = 0x89;
-/// | Tastenmaske
+/// | button mask
 pub const EV_MOUSE_DOWN: u8 = 0x20;
 pub const EV_MOUSE_UP: u8 = 0x40;
-/// | vorzeichenbehaftetes 5-Bit-Delta: 61 = hoch 1, 7F = runter 1 (getestet)
+/// | signed 5-bit delta: 61 = up 1, 7F = down 1 (tested)
 pub const EV_WHEEL: u8 = 0x60;
-/// Der Editor des Originals (0x410ae8) schreibt nur diese beiden.
+/// The original's editor (0x410ae8) only writes these two.
 pub const EV_WHEEL_UP: u8 = 0x61;
 pub const EV_WHEEL_DOWN: u8 = 0x7F;
-/// (Kennung, Maske); Namen in locales/ unter `mouse.<Kennung>`
+/// (id, mask); names in locales/ under `mouse.<id>`
 pub const MOUSE_BUTTONS: [(&str, u8); 5] =
     [("left", 0x01), ("right", 0x02), ("middle", 0x04), ("back", 0x08), ("forward", 0x10)];
 
-/// Ist `input` die Kennung oder ein Name (in irgendeiner Sprache) des Eintrags `<group>.<id>`?
+/// Is `input` the id or a name (in any language) of the entry `<group>.<id>`?
 fn is_named(group: &str, id: &str, input: &str) -> bool {
     id == fold(input) || i18n::matches(&format!("{group}.{id}"), input)
 }
 
-/// Modusname (jede Sprache) -> Modusbyte.
+/// Mode name (any language) -> mode byte.
 pub fn mode_value(name: &str) -> Option<u8> {
     MODES.iter().find(|(id, _)| is_named("mode", id, name)).map(|&(_, v)| v)
 }
 
-/// Namen der drei Modi in der aktuellen Sprache.
+/// Names of the three modes in the current language.
 pub fn mode_names() -> Vec<String> {
     MODES.iter().map(|(id, _)| i18n::name(&format!("mode.{id}"))).collect()
 }
 
-/// HID-Tastatur-Usages (USB HID Usage Tables, Seite 0x07). Usages sind Tasten*positionen* einer US-Tastatur;
-/// die Buchstaben folgen dem deutschen QWERTZ-Layout, bei dem Y und Z vertauscht sind.
+/// HID keyboard usages (USB HID Usage Tables, page 0x07). Usages are key *positions* on a US keyboard;
+/// the letters follow the German QWERTZ layout, where Y and Z are swapped.
 pub static KEYS: LazyLock<Vec<(String, u8)>> = LazyLock::new(|| {
     let mut keys: Vec<(String, u8)> = (0..26u8).map(|i| (((b'a' + i) as char).to_string(), 0x04 + i)).collect();
-    keys[(b'y' - b'a') as usize].1 = 0x1D; // deutsches y = US-z-Position
+    keys[(b'y' - b'a') as usize].1 = 0x1D; // German y = US z position
     keys[(b'z' - b'a') as usize].1 = 0x1C;
     keys.extend((0..10u8).map(|d| (d.to_string(), 0x1E + (d + 9) % 10)));
     keys.extend((1..=12u8).map(|n| (format!("f{n}"), 0x3A + n - 1)));
     keys
 });
 
-/// Benannte Tasten (Kennung, Usage); Namen je Sprache in locales/ unter `key.<Kennung>`.
+/// Named keys (id, usage); names per language in locales/ under `key.<id>`.
 pub const NAMED_KEYS: [(&str, u8); 28] = [
     ("enter", 0x28),
     ("esc", 0x29),
@@ -92,7 +92,7 @@ pub const NAMED_KEYS: [(&str, u8); 28] = [
     ("win-r", 0xE7),
 ];
 
-/// Tastenname (jede Sprache) -> HID-Usage.
+/// Key name (any language) -> HID usage.
 pub fn key(name: &str) -> Option<u8> {
     KEYS.iter()
         .find(|(n, _)| n == name)
@@ -100,7 +100,7 @@ pub fn key(name: &str) -> Option<u8> {
         .or_else(|| NAMED_KEYS.iter().find(|(id, _)| is_named("key", id, name)).map(|&(_, v)| v))
 }
 
-/// Anzeigename einer HID-Usage in der aktuellen Sprache.
+/// Display name of a HID usage in the current language.
 pub fn key_name(usage: u8) -> Option<String> {
     KEYS.iter()
         .find(|&&(_, v)| v == usage)
@@ -109,35 +109,35 @@ pub fn key_name(usage: u8) -> Option<String> {
 }
 
 fn k(name: &str) -> u8 {
-    key(name).expect("Taste in KEYS")
+    key(name).expect("key in KEYS")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     pub index: usize,
-    /// feste Kennung = deutscher Name in ASCII wie im Prototyp (z. B. "rueckgaengig")
+    /// fixed id = German name in ASCII as in the prototype (e.g. "rueckgaengig")
     pub key: &'static str,
     pub size: usize,
-    /// leer = Inhalt unbekannt, nicht zuweisbar
+    /// empty = content unknown, cannot be assigned
     pub record: Vec<u8>,
-    /// Datensatz im Mitschnitt des Originals gesehen oder am Geraet getestet (2026-10-11)
+    /// record seen in a capture of the original or tested on the device (2026-10-11)
     pub confirmed: bool,
     pub address: u16,
 }
 
 impl Function {
-    /// Name auf der Kommandozeile in der aktuellen Sprache.
+    /// Command-line name in the current language.
     pub fn name(&self) -> String {
         i18n::name(&format!("function.{}.name", self.key))
     }
 
-    /// Beschreibung in der aktuellen Sprache.
+    /// Description in the current language.
     pub fn label(&self) -> String {
         i18n::text(&format!("function.{}.label", self.key))
     }
 }
 
-/// 04 + alle druecken, in umgekehrter Reihenfolge loslassen + 00 (Muster von Strg+C / Strg+V / Win+D).
+/// 04 + press all, release in reverse order + 00 (pattern of Ctrl+C / Ctrl+V / Win+D).
 pub fn combo(usages: &[u8]) -> Vec<u8> {
     let mut out = vec![MODE_ONCE];
     for &u in usages {
@@ -158,7 +158,7 @@ pub fn hold_key(usage: u8) -> Vec<u8> {
     vec![MODE_HOLD, EV_KEY_DOWN, usage, 0xFF, 0xFF, EV_END]
 }
 
-/// Alt+Leertaste oeffnet das Fenstermenue, dann der Menuebuchstabe (deutsches Windows: N minimieren, X maximieren).
+/// Alt+Space opens the window menu, then the menu letter (Windows: N minimize, X maximize).
 fn window_menu(usage: u8) -> Vec<u8> {
     let (alt, space) = (k("alt"), k("space"));
     vec![
@@ -187,8 +187,8 @@ fn h(text: &str) -> Vec<u8> {
     text.split_whitespace().map(|b| u8::from_str_radix(b, 16).expect("Hex")).collect()
 }
 
-/// (Kennung, ListMemSize, record, confirmed) in der Reihenfolge von Mappingdefault.ini. Kennung = deutscher Name
-/// des Prototyps in ASCII; Name und Text je Sprache in locales/ unter `function.<Kennung>.name`/`.label`.
+/// (id, ListMemSize, record, confirmed) in the order of Mappingdefault.ini. id = German name of the
+/// prototype in ASCII; name and text per language in locales/ under `function.<id>.name`/`.label`.
 fn table() -> Vec<(&'static str, usize, Vec<u8>, bool)> {
     let (s, c, w, alt) = (k("ctrl"), k("shift"), k("win"), k("alt"));
     vec![
@@ -197,7 +197,7 @@ fn table() -> Vec<(&'static str, usize, Vec<u8>, bool)> {
         ("mittelklick", 6, h("06 24 89 ff ff 00"), true),
         ("browser-vor", 6, hold_mouse(0x10), true),
         ("browser-zurueck", 6, hold_mouse(0x08), true),
-        // INI-Name "Perfect"; auf der 6980 sendet das Original AL Calculator (andere Maeuse: Sensorbefehl C1 00)
+        // INI name "Perfect"; on the 6980 the original sends AL Calculator (other mice: sensor command C1 00)
         ("rechner", 8, h("04 85 92 01 85 00 00 00"), true),
         ("scroll-links", 0, vec![], true),
         ("scroll-rechts", 0, vec![], true),
@@ -236,10 +236,10 @@ fn table() -> Vec<(&'static str, usize, Vec<u8>, bool)> {
         ("speed-2x", 2, h("c8 00"), true),
         ("speed-4x", 2, h("ca 00"), true),
         ("speed-8x", 2, h("ce 00"), true),
-        // Datensaetze aus dem Code des Originals (0x423630), am Geraet getestet 2026-10-11 (Runde 6)
+        // records from the original's code (0x423630), tested on the device 2026-10-11 (round 6)
         ("nur-senkrecht", 2, h("c6 00"), true),
         ("nur-waagerecht", 2, h("c7 00"), true),
-        // Strg+Alt+K = Hotkey von GHOSTOPEN.exe (Autostart des Originals), der Macro.exe oeffnet
+        // Ctrl+Alt+K = hotkey of GHOSTOPEN.exe (autostart of the original), which opens Macro.exe
         ("gigabyte-ghost", 14, combo(&[s, alt, k("k")]), true),
     ]
 }
@@ -259,13 +259,13 @@ pub static FUNCTIONS: LazyLock<Vec<Function>> = LazyLock::new(|| {
         .collect()
 });
 
-/// Rad hoch/runter (Geraetetasten 8/9) haben kein Loslassen, deshalb gibt das Original (0x423630) den fuenf
-/// Maustasten-Funktionen dort einen einfachen Klick statt des Halte-Datensatzes: [ListMemSize] 46-50, nach der Liste.
+/// Wheel up/down (device buttons 8/9) have no release, so the original (0x423630) gives the five
+/// mouse button functions a simple click there instead of the hold record: [ListMemSize] 46-50, after the list.
 pub const WHEEL_BUTTONS: [usize; 2] = [8, 9];
 
-/// (Funktion, Adresse, Datensatz)
+/// (function, address, record)
 pub static WHEEL_CLICKS: LazyLock<Vec<(&'static str, u16, Vec<u8>)>> = LazyLock::new(|| {
-    let last = FUNCTIONS.last().expect("Tabelle");
+    let last = FUNCTIONS.last().expect("table");
     let mut addr = last.address + last.size as u16;
     [
         ("linksklick", 0x01),
@@ -283,10 +283,10 @@ pub static WHEEL_CLICKS: LazyLock<Vec<(&'static str, u16, Vec<u8>)>> = LazyLock:
     .collect()
 });
 
-/// Funktion nach Kennung oder Kommandozeilennamen in irgendeiner Sprache (mit oder ohne Umlaute).
+/// Function by id or command-line name in any language (with or without umlauts).
 pub fn by_key(key: &str) -> Option<&'static Function> {
     let folded = fold(key);
-    let folded = if folded == "perfect" { "rechner" } else { folded.as_str() }; // alter CLI-Name
+    let folded = if folded == "perfect" { "rechner" } else { folded.as_str() }; // old CLI name
     FUNCTIONS
         .iter()
         .find(|f| f.key == folded)
@@ -300,7 +300,7 @@ pub fn by_address(addr: u16) -> Option<&'static Function> {
     WHEEL_CLICKS.iter().find(|(_, a, _)| *a == addr).and_then(|(key, _, _)| by_key(key))
 }
 
-/// (Adresse, Datensatz), die das Original schreibt, wenn diese Funktion auf diese Geraetetaste kommt.
+/// (address, record) the original writes when this function is put on this device button.
 pub fn placement(function: &Function, button: usize) -> (u16, Vec<u8>) {
     if WHEEL_BUTTONS.contains(&button)
         && let Some((_, addr, record)) = WHEEL_CLICKS.iter().find(|(key, _, _)| *key == function.key)
@@ -310,15 +310,15 @@ pub fn placement(function: &Function, button: usize) -> (u16, Vec<u8>) {
     (function.address, function.record.clone())
 }
 
-// -- Makro-Ereignisse <-> Text --------------------------------------------------------------
+// -- Macro events <-> text ------------------------------------------------------------------
 
-/// Pythons `int()` fuer Dezimalzahlen (mit Vorzeichen, ohne Leerraum am Rand).
+/// Python `int()` for decimal numbers (with sign, no surrounding whitespace).
 fn parse_int(text: &str) -> Option<i64> {
     text.trim().parse().ok()
 }
 
-/// 'press a, wait 100, release a, click left, tap ctrl+c' -> Ereignisbytes (ohne Modus/Ende).
-/// Befehle, Tasten und Maustasten werden in jeder Sprache aus locales/ erkannt ('drück a, warte 100', auch 'drueck').
+/// 'press a, wait 100, release a, click left, tap ctrl+c' -> event bytes (without mode/end).
+/// Commands, keys and mouse buttons are recognised in every language from locales/ ('drück a, warte 100', also 'drueck').
 pub fn encode_events(text: &str) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     for raw in text.replace('\n', ",").split(',') {
@@ -368,7 +368,7 @@ pub fn encode_events(text: &str) -> Result<Vec<u8>> {
                 return Err(steps_err());
             }
             let ev = if up { EV_WHEEL_UP } else { EV_WHEEL_DOWN };
-            out.extend(std::iter::repeat_n(ev, n as usize)); // ein Ereignis pro Raste
+            out.extend(std::iter::repeat_n(ev, n as usize)); // one event per notch
         } else if verb("consumer") {
             let usage = if is_named("macro", "release", &arg) { Some(0) } else { parse_hex(&arg) };
             let Some(usage) = usage.filter(|u| (0..=0xFFFF).contains(u)) else {
@@ -394,7 +394,7 @@ pub fn encode_events(text: &str) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// Pythons `int(text, 16)`: optional 0x-Praefix.
+/// Python `int(text, 16)`: optional 0x prefix.
 fn parse_hex(text: &str) -> Option<i64> {
     let t = text.trim();
     let (neg, t) = match t.strip_prefix('-') {
@@ -418,8 +418,8 @@ fn event_size(b: u8) -> usize {
     }
 }
 
-/// Belegte Bytes eines Datensatzes/Makros inklusive 00-Endmarke; 0 fuer einen leeren Slot.
-/// Laeuft die Ereignisse ab, weil 00 auch in Argumenten vorkommt (z. B. 85 E9 00).
+/// Used bytes of a record/macro including the 00 end mark; 0 for an empty slot.
+/// Walks the events because 00 also occurs in arguments (e.g. 85 E9 00).
 pub fn record_length(data: &[u8]) -> usize {
     if data.is_empty() || matches!(data[0], 0x00 | 0xFF) {
         return 0;
@@ -431,7 +431,7 @@ pub fn record_length(data: &[u8]) -> usize {
     (i + 1).min(data.len())
 }
 
-/// Modusname in der aktuellen Sprache.
+/// Mode name in the current language.
 pub fn mode_name(mode: u8) -> String {
     MODES
         .iter()
@@ -439,8 +439,8 @@ pub fn mode_name(mode: u8) -> String {
         .map_or_else(|| format!("0x{mode:02X}"), |(id, _)| i18n::name(&format!("mode.{id}")))
 }
 
-/// (Modusname, [Ereignistexte]) in der aktuellen Sprache fuer einen Funktionsdatensatz oder ein Makro; stoppt bei 00.
-/// Geloeschte oder genullte Slots ergeben (None, []).
+/// (mode name, [event texts]) in the current language for a function record or a macro; stops at 00.
+/// Deleted or zeroed slots give (None, []).
 pub fn decode_record(data: &[u8]) -> (Option<String>, Vec<String>) {
     if data.is_empty() || matches!(data[0], 0x00 | 0xFF) {
         return (None, vec![]);
@@ -478,7 +478,7 @@ pub fn decode_record(data: &[u8]) -> (Option<String>, Vec<String>) {
             let mut d = if raw & 0x10 != 0 { raw - 32 } else { raw };
             let direction = if d > 0 { i18n::name("macro.up") } else { i18n::name("macro.down") };
             let prefix = format!("{} {direction} ", i18n::name("macro.wheel"));
-            // mehrere Rasten hintereinander -> eine Zeile
+            // several notches in a row -> one line
             if let Some(last) = events.pop_if(|e| e.starts_with(&prefix)) {
                 let prev: i32 = last.rsplit(' ').next().and_then(|n| n.parse().ok()).unwrap_or(0);
                 d += prev * if d > 0 { 1 } else { -1 };
@@ -534,7 +534,7 @@ mod tests {
     #[test]
     fn derived_patterns_reproduce_known_records() {
         assert_eq!(combo(&[k("win"), k("d")]), h("04 83 e3 83 07 84 07 84 e3 00"));
-        assert_eq!(combo(&[k("strg"), k("v")]), by_key("einfuegen").unwrap().record); // deutsche Namen gehen auch
+        assert_eq!(combo(&[k("strg"), k("v")]), by_key("einfuegen").unwrap().record); // German names work as well
         assert_eq!(consumer(0x00EA), h("04 85 ea 00 85 00 00 00"));
         assert_eq!(hold_key(k("strg")), by_key("strg").unwrap().record);
         assert_eq!(hold_mouse(0x04), by_key("mittelklick").unwrap().record);
@@ -613,7 +613,7 @@ mod tests {
         assert_eq!(by_key("gigabyte-ghost").unwrap().address, 0x1ECE);
         assert_eq!(by_key("gigabyte-ghost").unwrap().record, h("04 83 e0 83 e2 83 0e 84 0e 84 e2 84 e0 00"));
         assert_eq!(by_key("perfect").unwrap().key, "rechner");
-        assert_eq!(by_key("copy").unwrap().key, "kopieren"); // englische Namen gehen immer
+        assert_eq!(by_key("copy").unwrap().key, "kopieren"); // English names always work
         assert_eq!(by_key("Rückgängig").unwrap().key, "rueckgaengig");
         assert_eq!(by_key("schliessen").unwrap().name(), "schließen");
     }

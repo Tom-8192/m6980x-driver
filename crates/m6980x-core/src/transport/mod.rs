@@ -1,14 +1,14 @@
-//! Feature-Report-Transport fuer die Gigabyte GHOST M6980X.
+//! Feature report transport for the Gigabyte GHOST M6980X.
 //!
-//! Die Maus wird ueber einen 8-Byte-HID-Feature-Report *ohne* Report-ID auf USB-Interface 0
-//! (dem Maus-Interface selbst) konfiguriert.
+//! The mouse is configured via an 8-byte HID feature report *without* report ID on USB interface 0
+//! (the mouse interface itself).
 //!
 //! * Windows: hidapi.
-//! * Linux: direkte `/dev/hidraw*`-ioctls - ohne Abhaengigkeit, und anders als hidapis libusb-Backend
-//!   wird der Kernel-Treiber nie geloest (die Maus funktioniert weiter).
+//! * Linux: direct `/dev/hidraw*` ioctls - no dependency, and unlike hidapi's libusb backend
+//!   the kernel driver is never detached (the mouse keeps working).
 //!
-//! Jeder Befehl laeuft unter einer prozessuebergreifenden Sperre (`lock`/`unlock`), damit sich zwei
-//! Programme (z. B. Oberflaeche mit Live-Anzeige und Kommandozeile) nicht die Antworten wegnehmen.
+//! Every command runs under a cross-process lock (`lock`/`unlock`) so that two programs
+//! (e.g. the GUI with live display and the command line) do not take each other's replies.
 
 use crate::{Error, Result, hex, tr};
 
@@ -20,20 +20,20 @@ mod windows;
 pub const VID: u16 = 0xE0FF;
 pub const PID: u16 = 0x0001;
 pub const INTERFACE: i32 = 0;
-/// Datenbytes; die Report-ID 0 gehoert nicht dazu.
+/// data bytes; the report ID 0 is not included.
 pub const REPORT_LEN: usize = 8;
-/// So lange wartet ein Befehl hoechstens auf ein anderes Programm, das gerade mit der Maus spricht.
+/// Longest time a command waits for another program that is currently talking to the mouse.
 pub const LOCK_TIMEOUT_MS: u32 = 5000;
 
 pub trait Transport {
     fn set_feature(&mut self, data: &[u8; REPORT_LEN]) -> Result<()>;
     fn get_feature(&mut self) -> Result<[u8; REPORT_LEN]>;
-    /// Sperre fuer einen ganzen Befehl (Busy-Abfrage, Senden, Done-Abfrage).
+    /// Lock for a whole command (busy poll, send, done poll).
     fn lock(&mut self) -> Result<()> {
         Ok(())
     }
     fn unlock(&mut self) {}
-    /// Geraetepfad (hidapi-Pfad oder /dev/hidrawN), nur zur Anzeige.
+    /// Device path (hidapi path or /dev/hidrawN), for display only.
     fn path(&self) -> String {
         String::new()
     }
@@ -57,7 +57,7 @@ impl<T: Transport + ?Sized> Transport for Box<T> {
     }
 }
 
-/// hidapi und hidraw liefern beide [Report-ID, Daten...]; auf 8 Datenbytes normalisieren.
+/// hidapi and hidraw both return [report ID, data...]; normalise to 8 data bytes.
 pub fn strip_report_id(buf: &[u8]) -> Result<[u8; REPORT_LEN]> {
     let data = match buf.len() {
         n if n == REPORT_LEN + 1 => &buf[1..],
@@ -66,7 +66,7 @@ pub fn strip_report_id(buf: &[u8]) -> Result<[u8; REPORT_LEN]> {
             return Err(Error::Transport(format!("unexpected feature report length {n}: {}", hex(buf))));
         }
     };
-    Ok(data.try_into().expect("Laenge geprueft"))
+    Ok(data.try_into().expect("length checked"))
 }
 
 pub(crate) fn not_found() -> Error {
@@ -78,7 +78,7 @@ pub(crate) fn not_found() -> Error {
     ))
 }
 
-/// Oeffnet die Maus (oder den angegebenen Pfad).
+/// Opens the mouse (or the given path).
 pub fn open_transport(path: Option<&str>) -> Result<Box<dyn Transport>> {
     #[cfg(target_os = "linux")]
     {

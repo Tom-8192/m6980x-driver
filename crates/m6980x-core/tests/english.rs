@@ -1,4 +1,4 @@
-//! Ohne cfg(test) ist Englisch die Standardsprache - Ausgaben englisch, Eingaben in beiden Sprachen.
+//! Without cfg(test), English is the default language - output in English, input in both languages.
 
 use m6980x_core::functions::{self as fnc, by_key};
 use m6980x_core::i18n;

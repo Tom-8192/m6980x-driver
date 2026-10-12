@@ -1,4 +1,4 @@
-//! Windows: hidapi fuer die Feature-Reports, benannter Mutex als Sperre zwischen Prozessen.
+//! Windows: hidapi for the feature reports, a named mutex as the lock between processes.
 
 use std::ffi::CString;
 
@@ -36,7 +36,7 @@ impl HidapiTransport {
         };
         let dev = api.open_path(&path).map_err(hid_err)?;
         let name: Vec<u16> = MUTEX_NAME.encode_utf16().chain(Some(0)).collect();
-        // SAFETY: gueltiger, nullterminierter Name; das Handle wird in Drop geschlossen.
+        // SAFETY: valid, null-terminated name; the handle is closed in Drop.
         let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
         if mutex.is_null() {
             return Err(Error::Transport(tr!("transport.lock_create_failed", error = std::io::Error::last_os_error())));
@@ -59,7 +59,7 @@ impl Transport for HidapiTransport {
     }
 
     fn lock(&mut self) -> Result<()> {
-        // SAFETY: Handle aus CreateMutexW, lebt so lange wie self.
+        // SAFETY: handle from CreateMutexW, lives as long as self.
         match unsafe { WaitForSingleObject(self.mutex, LOCK_TIMEOUT_MS) } {
             WAIT_OBJECT_0 | WAIT_ABANDONED => {
                 self.locked = true;
@@ -72,7 +72,7 @@ impl Transport for HidapiTransport {
 
     fn unlock(&mut self) {
         if self.locked {
-            // SAFETY: dieser Thread besitzt den Mutex (lock war erfolgreich).
+            // SAFETY: this thread owns the mutex (lock succeeded).
             unsafe { ReleaseMutex(self.mutex) };
             self.locked = false;
         }
@@ -86,7 +86,7 @@ impl Transport for HidapiTransport {
 impl Drop for HidapiTransport {
     fn drop(&mut self) {
         self.unlock();
-        // SAFETY: Handle gehoert uns.
+        // SAFETY: the handle is ours.
         unsafe { CloseHandle(self.mutex) };
     }
 }

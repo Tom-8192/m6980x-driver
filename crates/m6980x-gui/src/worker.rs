@@ -1,5 +1,5 @@
-//! Alle Mauszugriffe laufen in einem Hintergrund-Thread; das Fenster blockiert nie.
-//! Ein Auftrag liefert eine Funktion zurueck, die im GUI-Thread den Zustand aktualisiert.
+//! All mouse access runs in a background thread; the window never blocks.
+//! A job returns a function that updates the state in the GUI thread.
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
@@ -25,7 +25,7 @@ pub struct Done {
     pub result: std::result::Result<Apply, String>,
 }
 
-/// Simulierte Maus mit leerem Speicher (wie eine frisch geloeschte Maus) fuer den Probelauf ohne Geraet.
+/// Simulated mouse with an empty memory (like a freshly erased mouse) for the dry run without a device.
 fn fake_mouse() -> Box<dyn Transport> {
     let mut m = FakeMouse::new();
     m.rom[..0x1F00].fill(0xFF);
@@ -35,7 +35,7 @@ fn fake_mouse() -> Box<dyn Transport> {
 pub struct Device {
     tx: Sender<Request>,
     pub rx: Receiver<Done>,
-    /// eingereiht + laufend, nur im GUI-Thread benutzt
+    /// queued + running, only used in the GUI thread
     pub pending: usize,
 }
 
@@ -50,13 +50,13 @@ impl Device {
                     if g.is_none() {
                         let t = if fake { fake_mouse() } else { open_transport(device.as_deref())? };
                         let mut m = M6980X::new(t);
-                        m.check_model()?; // nur der Speicheraufbau der 6980X ist bekannt
+                        m.check_model()?; // only the memory layout of the 6980X is known
                         g = Some(m);
                     }
-                    (req.job)(g.as_mut().expect("verbunden"))
+                    (req.job)(g.as_mut().expect("connected"))
                 })();
                 if result.is_err() && !fake {
-                    g = None; // beim naechsten Auftrag neu verbinden
+                    g = None; // reconnect on the next job
                 }
                 let done = Done { label: req.label, quiet: req.quiet, result: result.map_err(|e| e.to_string()) };
                 if done_tx.send(done).is_err() {
@@ -70,7 +70,7 @@ impl Device {
 
     pub fn submit(&mut self, label: String, quiet: bool, job: Job) {
         self.pending += 1;
-        // Der Worker lebt so lange wie das Fenster; ein Fehler hier hiesse, er ist abgestuerzt.
+        // The worker lives as long as the window; an error here would mean it crashed.
         if self.tx.send(Request { label, quiet, job }).is_err() {
             self.pending -= 1;
         }

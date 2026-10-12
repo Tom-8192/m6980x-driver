@@ -1,6 +1,6 @@
-//! m6980x_configtool: Kommandozeile des M6980X Configuration Tool (Maus Gigabyte GHOST M6980X).
+//! m6980x_configtool: command line of the M6980X Configuration Tool (Gigabyte GHOST M6980X mouse).
 //!
-//! Alle Texte (auch die Hilfe) kommen aus locales/*.yml in der Sprache von `--lang`, `M6980X_LANG` oder des Systems.
+//! All texts (including the help) come from locales/*.yml in the language of `--lang`, `M6980X_LANG` or the system.
 
 mod help;
 
@@ -29,7 +29,7 @@ type G = M6980X<Box<dyn Transport>>;
 
 const RATE_CHOICES: [&str; 8] = ["1000", "500", "333", "250", "200", "166", "142", "125"];
 
-/// Hilfetexte: locales/*.yml unter cli.about, cli.cmd.*, cli.arg.*, cli.opt.* (siehe help.rs).
+/// Help texts: locales/*.yml under cli.about, cli.cmd.*, cli.arg.*, cli.opt.* (see help.rs).
 #[derive(Parser)]
 #[command(name = "m6980x_configtool", version)]
 struct Cli {
@@ -161,7 +161,7 @@ fn parse_lang(text: &str) -> std::result::Result<String, String> {
     i18n::resolve(text).ok_or_else(|| tr!("cli.expected_one_of", names = i18n::available().join(", ")))
 }
 
-/// `--lang` muss vor dem Parsen bekannt sein, damit Hilfe und Fehlermeldungen schon in der richtigen Sprache kommen.
+/// `--lang` must be known before parsing so that help and error messages already come in the right language.
 fn lang_from_args() -> Option<String> {
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -213,7 +213,7 @@ fn main() -> ExitCode {
 fn with_device(cli: &Cli) -> Result<()> {
     let mut g = M6980X::new(open_transport(cli.device.as_deref())?);
     if !matches!(cli.command, Cmd::Info { .. }) {
-        g.check_model()?; // info bleibt nutzbar, um zu sehen, welches Modell steckt
+        g.check_model()?; // info stays usable to see which model is plugged in
     }
     run(&mut g, &cli.command)
 }
@@ -231,7 +231,7 @@ fn run(g: &mut G, cmd: &Cmd) -> Result<()> {
         }
         Cmd::Led { profile, color } => {
             if !color.is_empty() {
-                let Some(p) = profile else { unreachable!("Farbe ohne Profil parst clap nicht") };
+                let Some(p) = profile else { unreachable!("clap does not parse a colour without a profile") };
                 g.set_led_color(p - 1, parse_led(color)?)?;
             }
             let profiles: Vec<u8> = match profile {
@@ -247,7 +247,7 @@ fn run(g: &mut G, cmd: &Cmd) -> Result<()> {
         Cmd::Watch { seconds } => cmd_watch(g, *seconds),
         Cmd::Rate { hz, temporary } => {
             if let Some(hz) = hz {
-                let ms = names::interval_for_hz(hz.parse().expect("Auswahl")).expect("Auswahl");
+                let ms = names::interval_for_hz(hz.parse().expect("value from the list")).expect("value from the list");
                 g.set_report_interval(ms)?;
                 persist(g, *temporary)?;
             }
@@ -339,7 +339,7 @@ fn run(g: &mut G, cmd: &Cmd) -> Result<()> {
         Cmd::RomDump { file } => {
             let data = read_full_rom(g)?;
             if is_meb(file) {
-                backup::write_meb(&data, file)?; // Format der Original-Software
+                backup::write_meb(&data, file)?; // format of the original software
             } else {
                 std::fs::write(file, &data)?;
             }
@@ -362,7 +362,7 @@ fn run(g: &mut G, cmd: &Cmd) -> Result<()> {
             print_macros(&data);
             Ok(())
         }
-        Cmd::Gui | Cmd::Functions => unreachable!("ohne Geraet behandelt"),
+        Cmd::Gui | Cmd::Functions => unreachable!("handled without a device"),
     }
 }
 
@@ -385,7 +385,7 @@ fn print_left(left: &[(usize, usize)]) {
     }
 }
 
-/// Abtastrate, DPI, aktives Profil/Stufe gehen beim Abstecken verloren, wenn sie nicht mit 01 02 gespeichert werden (getestet).
+/// Report rate, DPI and active profile/stage are lost when unplugged unless saved with 01 02 (tested).
 fn persist(g: &mut G, temporary: bool) -> Result<()> {
     if temporary {
         println!("{}", tr!("cli.not_saved"));
@@ -492,7 +492,7 @@ fn cmd_dpi(g: &mut G, action: Option<&DpiCmd>) -> Result<()> {
     Ok(())
 }
 
-/// Nur lesend: jede Aenderung von aktivem Profil / Register 07 ausgeben (z. B. beim Druecken der Tasten).
+/// Read-only: print every change of the active profile / register 07 (e.g. when pressing the buttons).
 fn cmd_watch(g: &mut G, seconds: f64) -> Result<()> {
     let end = Instant::now() + Duration::from_secs_f64(seconds.max(0.0));
     let mut last = None;
@@ -630,7 +630,7 @@ fn cmd_macro(g: &mut G, slot: u8, name: &str, events: &[String], mode: u8, icon:
     Ok(())
 }
 
-/// Startet die Oberflaeche (m6980x_configtool_gui), die neben dieser Datei liegt.
+/// Starts the GUI (m6980x_configtool_gui) that lives next to this executable.
 fn launch_gui(device: Option<&str>, lang: Option<&str>) -> Result<()> {
     let exe = std::env::current_exe()?;
     let gui = exe.with_file_name(format!("m6980x_configtool_gui{}", std::env::consts::EXE_SUFFIX));
@@ -660,7 +660,7 @@ mod tests {
     #[test]
     fn every_command_and_argument_has_help() {
         let missing = help::missing(Cli::command());
-        assert!(missing.is_empty(), "ohne Hilfetext in locales/en.yml: {missing:#?}");
+        assert!(missing.is_empty(), "without help text in locales/en.yml: {missing:#?}");
     }
 
     #[test]

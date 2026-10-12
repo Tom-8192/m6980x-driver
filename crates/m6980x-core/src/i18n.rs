@@ -1,30 +1,30 @@
-//! Sprache der Ausgaben. Alle Texte stehen in `locales/<sprache>.yml` im Projektstamm (eine Datei pro Sprache,
-//! beim Kompilieren eingebettet von rust-i18n); eine neue Sprache braucht nur eine neue Datei. Fehlt ein Text,
-//! gilt der englische.
+//! Language of the output. All texts live in `locales/<language>.yml` in the project root (one file per
+//! language, embedded at compile time by rust-i18n); a new language only needs a new file. If a text is
+//! missing, the English one is used.
 //!
-//! Die Sprache gilt prozessweit; Kommandozeile und Oberflaeche setzen sie beim Start (`--lang`, Umgebungsvariable
-//! `M6980X_LANG`, sonst Systemsprache). Namen, die man eingibt (Tasten, Farben, Funktionen, Makrotext), werden in
-//! allen Sprachen erkannt, mit und ohne Umlaute; ein Eintrag "space|leer" nennt Anzeigename und weitere Eingaben.
-//! Die Unit-Tests laufen auf Deutsch, weil sie die Texte des (deutschen) Python-Prototyps vergleichen.
+//! The language applies to the whole process; command line and GUI set it at startup (`--lang`, environment
+//! variable `M6980X_LANG`, otherwise the system language). Names that are typed (keys, colours, functions, macro
+//! text) are recognised in all languages, with and without umlauts; an entry "space|leer" gives the display name and further inputs.
+//! The unit tests run in German because they compare the texts of the (German) Python prototype.
 
 use std::fmt::Display;
 use std::sync::{LazyLock, RwLock};
 
-// Pfad relativ zu crates/m6980x-core; build.rs baut neu, wenn sich dort etwas aendert.
+// path relative to crates/m6980x-core; build.rs rebuilds when something changes there.
 rust_i18n::i18n!("../../locales", fallback = "en");
 
-/// Ersatzsprache und Standard ausserhalb der Tests
+/// fallback language and default outside the tests
 pub const DEFAULT: &str = "en";
 
 static CURRENT: LazyLock<RwLock<String>> =
     LazyLock::new(|| RwLock::new(if cfg!(test) { "de" } else { DEFAULT }.to_string()));
 
-/// Code der aktuellen Sprache, z. B. "en".
+/// Code of the current language, e.g. "en".
 pub fn lang() -> String {
     CURRENT.read().map(|l| l.clone()).unwrap_or_else(|_| DEFAULT.into())
 }
 
-/// Sprache umschalten; `false`, wenn es dafuer keine Datei gibt.
+/// Switch the language; `false` if there is no file for it.
 pub fn set_lang(code: &str) -> bool {
     let Some(code) = resolve(code) else {
         return false;
@@ -35,14 +35,14 @@ pub fn set_lang(code: &str) -> bool {
     true
 }
 
-/// Alle Sprachen mit Datei, Englisch zuerst.
+/// All languages that have a file, English first.
 pub fn available() -> Vec<String> {
     let mut codes: Vec<String> = _rust_i18n_available_locales().iter().map(|c| c.to_string()).collect();
     codes.sort_by_key(|c| (c != DEFAULT, c.clone()));
     codes
 }
 
-/// Passende vorhandene Sprache zu einem Code oder Locale-Namen ("de_DE.UTF-8", "de-AT", "DE"), sonst None.
+/// Matching available language for a code or locale name ("de_DE.UTF-8", "de-AT", "DE"), otherwise None.
 pub fn resolve(text: &str) -> Option<String> {
     let t = text.trim().split(['.', '@']).next().unwrap_or("").replace('_', "-").to_lowercase();
     let primary = t.split('-').next().unwrap_or("");
@@ -51,12 +51,12 @@ pub fn resolve(text: &str) -> Option<String> {
     find(&t).or_else(|| find(primary)).or_else(|| matches!(primary, "c" | "posix").then(|| DEFAULT.to_string()))
 }
 
-/// Name einer Sprache in ihr selbst ("Deutsch").
+/// Name of a language in itself ("Deutsch").
 pub fn native_name(code: &str) -> String {
     text_in(code, "language.name")
 }
 
-/// Sprache aus `M6980X_LANG`, sonst aus der Systemsprache, sonst Englisch.
+/// Language from `M6980X_LANG`, otherwise from the system language, otherwise English.
 pub fn detect() -> String {
     if let Some(code) = std::env::var("M6980X_LANG").ok().as_deref().and_then(resolve) {
         return code;
@@ -64,12 +64,12 @@ pub fn detect() -> String {
     system_languages().iter().find_map(|l| resolve(l)).unwrap_or_else(|| DEFAULT.into())
 }
 
-/// Bevorzugte Oberflaechensprachen des Benutzers, z. B. ["de-DE", "en-US"].
+/// Preferred UI languages of the user, e.g. ["de-DE", "en-US"].
 #[cfg(windows)]
 fn system_languages() -> Vec<String> {
     use windows_sys::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAGE_NAME};
     let (mut count, mut len) = (0u32, 0u32);
-    // SAFETY: erster Aufruf nur mit Laengenabfrage (Puffer null), zweiter mit Puffer der gemeldeten Laenge.
+    // SAFETY: first call only queries the length (null buffer), second one with a buffer of the reported length.
     unsafe {
         if GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &mut count, std::ptr::null_mut(), &mut len) == 0 {
             return Vec::new();
@@ -84,7 +84,7 @@ fn system_languages() -> Vec<String> {
 
 #[cfg(not(windows))]
 fn system_languages() -> Vec<String> {
-    // Reihenfolge wie gettext: LANGUAGE (Liste), LC_ALL, LC_MESSAGES, LANG
+    // order as in gettext: LANGUAGE (list), LC_ALL, LC_MESSAGES, LANG
     for var in ["LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"] {
         if let Ok(value) = std::env::var(var)
             && !value.is_empty()
@@ -95,22 +95,22 @@ fn system_languages() -> Vec<String> {
     Vec::new()
 }
 
-/// Gibt es diesen Schluessel (in der englischen Datei)?
+/// Does this key exist (in the English file)?
 pub fn has(key: &str) -> bool {
     _rust_i18n_try_translate(DEFAULT, key).is_some()
 }
 
-/// Text in einer bestimmten Sprache (fehlt er, der englische; fehlt auch der, der Schluessel selbst).
+/// Text in a given language (if missing, the English one; if that is missing too, the key itself).
 pub fn text_in(lang: &str, key: &str) -> String {
     _rust_i18n_translate(lang, key).into_owned()
 }
 
-/// Text in der aktuellen Sprache.
+/// Text in the current language.
 pub fn text(key: &str) -> String {
     text_in(&lang(), key)
 }
 
-/// Text mit Platzhaltern `%{name}`; Werte schon fertig formatiert (z. B. `format!("{x:04X}")`).
+/// Text with placeholders `%{name}`; values already formatted (e.g. `format!("{x:04X}")`).
 pub fn text_with(key: &str, args: &[(&str, &dyn Display)]) -> String {
     let mut out = text(key);
     for (name, value) in args {
@@ -119,18 +119,18 @@ pub fn text_with(key: &str, args: &[(&str, &dyn Display)]) -> String {
     out
 }
 
-/// Anzeigename in der aktuellen Sprache: bei "space|leer" der erste Teil.
+/// Display name in the current language: the first part of "space|leer".
 pub fn name(key: &str) -> String {
     text(key).split('|').next().unwrap_or_default().trim().to_string()
 }
 
-/// Passt die Eingabe zu diesem Namen in irgendeiner Sprache (alle Teile von "a|b", Umlaute egal)?
+/// Does the input match this name in any language (all parts of "a|b", umlauts ignored)?
 pub fn matches(key: &str, input: &str) -> bool {
     let input = fold(input.trim());
     available().iter().any(|l| text_in(l, key).split('|').any(|n| fold(n.trim()) == input))
 }
 
-/// Fuer Vergleiche von Eingaben: klein, Umlaute als ae/oe/ue/ss ("Rückgängig" == "rueckgaengig").
+/// For comparing inputs: lower case, umlauts as ae/oe/ue/ss ("Rückgängig" == "rueckgaengig").
 pub fn fold(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 4);
     for c in text.chars().flat_map(char::to_lowercase) {
@@ -145,7 +145,7 @@ pub fn fold(text: &str) -> String {
     out
 }
 
-/// `tr!("error.no_reply", packet = hex(pkt))` - Text der aktuellen Sprache aus `locales/`, `%{packet}` ersetzt.
+/// `tr!("error.no_reply", packet = hex(pkt))` - text of the current language from `locales/` with `%{packet}` replaced.
 #[macro_export]
 macro_rules! tr {
     ($key:expr $(,)?) => {
@@ -195,11 +195,11 @@ mod tests {
             .collect()
     }
 
-    /// Jede Sprachdatei hat genau die Schluessel der englischen und dieselben Platzhalter.
+    /// Every language file has exactly the keys of the English one and the same placeholders.
     #[test]
     fn every_language_is_complete() {
         let en = keys(DEFAULT);
-        assert!(en.len() > 100, "en.yml nicht geladen");
+        assert!(en.len() > 100, "en.yml not loaded");
         for lang in available() {
             let have = keys(&lang);
             let missing: Vec<_> = en.difference(&have).collect();

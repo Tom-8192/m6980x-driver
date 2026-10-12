@@ -1,4 +1,4 @@
-// Die Sprachdateien werden beim Kompilieren eingebettet (rust-i18n); bei Aenderungen neu bauen.
+// The language files are embedded at compile time (rust-i18n); rebuild when they change.
 fn main() {
     println!("cargo:rerun-if-changed=../../locales");
 }

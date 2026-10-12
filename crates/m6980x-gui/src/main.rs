@@ -1,9 +1,9 @@
-//! M6980X Configuration Tool - Oberflaeche (egui) mit allen Funktionen des Tools (Windows + Linux).
+//! M6980X Configuration Tool - GUI (egui) with all features of the tool (Windows + Linux).
 //!
-//!     m6980x_configtool_gui [--device PFAD] [--fake] [--lang en|de]
+//!     m6980x_configtool_gui [--device PATH] [--fake] [--lang en|de]
 //!
-//! `--fake` startet gegen eine simulierte Maus (Probelauf ohne Geraet). Die Sprache laesst sich im Fenster umschalten
-//! und wird gespeichert; ohne gespeicherte Wahl gilt `--lang`, `M6980X_LANG` oder die Systemsprache.
+//! `--fake` runs against a simulated mouse (dry run without a device). The language can be switched in the
+//! window and is remembered; without a stored choice, `--lang`, `M6980X_LANG` or the system language applies.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
@@ -24,7 +24,7 @@ use m6980x_core::rom::{self as romlayout, ICON_COUNT, ICONS_EMBEDDED, MACRO_NAME
 use m6980x_core::{Result, backup, tr};
 use worker::{Apply, Device, G};
 
-/// Modusbyte und Kennung; Beschriftung in locales/ unter `gui.mode.<Kennung>`
+/// mode byte and id; label in locales/ under `gui.mode.<id>`
 const MODES: [(u8, &str); 3] = [(fnc::MODE_ONCE, "once"), (fnc::MODE_LOOP, "loop"), (fnc::MODE_HOLD, "fire")];
 const LANG_KEY: &str = "lang";
 const DPI_LINKED_KEY: &str = "dpi_linked";
@@ -39,8 +39,8 @@ fn level_to_8bit(level: u8) -> u8 {
     }
 }
 
-/// Bildbeschreibungen je Sprache ("en" ist der Bild-KI-Prompt, taugt aber als Kurzbeschreibung);
-/// fehlt eine Sprache in der Datei, gilt Englisch.
+/// Icon descriptions per language ("en" is the image AI prompt but works as a short description);
+/// if a language is missing in the file, English is used.
 fn load_icon_texts(lang: &str) -> HashMap<u8, String> {
     let Ok(json) = serde_json::from_str::<serde_json::Value>(ICON_TEXTS) else {
         return HashMap::new();
@@ -75,7 +75,7 @@ enum Target {
     Macro(usize),
 }
 
-/// Rueckfrage mit Ja/Nein; bei Ja wird `action` ausgefuehrt.
+/// Yes/no question; on yes, `action` runs.
 struct Confirm {
     title: String,
     text: String,
@@ -139,7 +139,7 @@ fn nothing() -> Result<Apply> {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>, device: Option<String>, fake: bool, lang: Option<String>) -> Self {
-        // --lang vor gespeicherter Wahl vor Umgebung/Systemsprache
+        // --lang before the stored choice before environment/system language
         let stored = cc.storage.and_then(|s| s.get_string(LANG_KEY)).as_deref().and_then(i18n::resolve);
         i18n::set_lang(&lang.or(stored).unwrap_or_else(i18n::detect));
         let mut app = Self {
@@ -185,7 +185,7 @@ impl App {
         app
     }
 
-    // -- Hilfen ------------------------------------------------------------------------
+    // -- helpers ----------------------------------------------------------------------
     fn log(&mut self, text: impl Into<String>) {
         let text = text.into();
         if self.log.last() != Some(&text) {
@@ -194,7 +194,7 @@ impl App {
         self.status = text;
     }
 
-    /// Mausauftrag einreihen; auf Wunsch danach dauerhaft speichern (01 02).
+    /// Queue a mouse job; optionally save permanently afterwards (01 02).
     fn run(
         &mut self,
         label: impl Into<String>,
@@ -241,7 +241,7 @@ impl App {
         self.confirm = Some(Confirm { title: title.into(), text: text.into(), action: Box::new(action) });
     }
 
-    // -- Uebersicht --------------------------------------------------------------------
+    // -- overview ---------------------------------------------------------------------
     fn refresh_all(&mut self) {
         self.run(tr!("gui.read_settings"), false, |g| {
             let mut buttons = Vec::new();
@@ -469,7 +469,7 @@ impl App {
         }
     }
 
-    // -- Tasten ------------------------------------------------------------------------
+    // -- buttons ----------------------------------------------------------------------
     fn targets(&self) -> Vec<(String, Target)> {
         let mut list = vec![(tr!("names.default"), Target::Standard)];
         list.extend(
@@ -564,7 +564,7 @@ impl App {
         });
     }
 
-    // -- Makros ------------------------------------------------------------------------
+    // -- macros -----------------------------------------------------------------------
     fn icon_text(&self, n: u8) -> String {
         if n <= ICONS_EMBEDDED {
             let texts = self.icon_texts.get(&i18n::lang());
@@ -743,7 +743,7 @@ impl App {
         self.read_full_rom_then_show(label, move |g| g.write_macro(slot, &record, &name, icon));
     }
 
-    /// Wie der Import im Editor des Originals: fuellt Modus und Ereignisse; die Datei hat keinen Namen.
+    /// Like the import in the original's editor: fills mode and events; the file has no name.
     fn import_macro_file(&mut self) {
         let Some(path) = rfd::FileDialog::new().add_filter(tr!("gui.macro_file_filter"), &["ini"]).pick_file() else {
             return;
@@ -782,7 +782,7 @@ impl App {
         }
     }
 
-    // -- Sicherung ---------------------------------------------------------------------
+    // -- backup -----------------------------------------------------------------------
     fn ui_backup(&mut self, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing.y = 8.0;
         let backup = tr!("gui.backup_button");
@@ -890,7 +890,7 @@ impl App {
         });
     }
 
-    // -- Dialoge -----------------------------------------------------------------------
+    // -- dialogs ----------------------------------------------------------------------
     fn ui_dialogs(&mut self, ctx: &egui::Context) {
         if let Some((title, text)) = &self.error {
             let mut close = false;
@@ -923,7 +923,7 @@ impl App {
                 answer = Some(false);
             }
             if let Some(yes) = answer {
-                let c = self.confirm.take().expect("Rueckfrage offen");
+                let c = self.confirm.take().expect("question open");
                 if yes {
                     (c.action)(self);
                 }
@@ -983,7 +983,7 @@ impl eframe::App for App {
                     });
                     if lang != i18n::lang() {
                         i18n::set_lang(&lang);
-                        self.refresh_all(); // Infozeile und Texte aus der Maus neu aufbauen
+                        self.refresh_all(); // rebuild the info line and the texts read from the mouse
                     }
                 });
             });
