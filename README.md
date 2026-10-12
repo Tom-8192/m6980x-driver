@@ -1,113 +1,119 @@
 # M6980X Configuration Tool
 
-Schlankes Konfigurationstool für die **Gigabyte GHOST M6980X** (USB `E0FF:0001`) als Ersatz für die
-Gigabyte-Software „GHOST Macro Engine“. Geschrieben in Rust. Es besteht aus zwei Programmen ohne Installation
-und ohne Laufzeitumgebung:
+*[Deutsche Fassung](README.de.md)*
 
-* `m6980x_configtool`: Kommandozeile
-* `m6980x_configtool_gui`: Oberfläche (egui)
+A lightweight configuration tool for the **Gigabyte GHOST M6980X** mouse (USB `E0FF:0001`), replacing Gigabyte's
+"GHOST Macro Engine" software. Written in Rust. It consists of two programs that need no installation and no
+runtime:
 
-Inoffizieller Nachbau, nicht von Gigabyte. „GHOST“ meint hier nur die Maus bzw. die offizielle Software
+* `m6980x_configtool`: command line
+* `m6980x_configtool_gui`: graphical user interface (egui)
+
+Unofficial reimplementation, not affiliated with Gigabyte. "GHOST" refers only to the mouse or the official software
 (`Macro.exe`).
 
-**Stand 2.0 (Rust-Port des Python-Prototyps 1.1):** Alle Funktionen sind portiert: Profil, LED (27 Farben), DPI
-(X/Y, 90–6030), Abtastrate, dauerhaft speichern, Tastenbelegung (46 Funktionen, Makros, Standard), Makros
-(Editor, 3 Modi, Mausrad, Consumer-Tasten, Bilder 1–100), Sicherung (JSON), `.meb` und Makro-`.ini` des Originals.
-Jeder Schreibvorgang wird zurückgelesen. Die Pakete sind bytegleich mit dem am Gerät getesteten Prototyp
-(Paritätstests, siehe unten).
-Neu gegenüber dem Prototyp ist eine **prozessübergreifende Sperre**: Oberfläche und Kommandozeile dürfen gleichzeitig
-laufen. Unter Linux ist das Tool noch nicht an der Maus getestet.
+**Status 2.0 (Rust port of the Python prototype 1.1):** All features are ported: profile, LED (27 colours), DPI
+(separate X/Y, 90–6030), report rate, persistent save, button assignment (46 functions, macros, default), macros
+(editor, 3 modes, mouse wheel, consumer keys, pictures 1–100), backup (JSON), and the original software's `.meb` and
+macro `.ini` files. Every write is read back for verification. The packets sent are byte-identical to those of the
+prototype that was tested on the device (parity tests, see below). Writing, restoring and the new lock have been
+tested on the device under Windows.
+New compared to the prototype is a **cross-process lock**: the GUI and the command line can run at the same time.
+On Linux the tool builds and passes all tests but has not yet been tested with the mouse.
 
-**Projektstand, Vorgaben und offene Aufgaben:** [`docs/UEBERGABE.md`](docs/UEBERGABE.md) · Protokoll:
+The user interface, command output and the command-line argument names (e.g. `hinten`, `kopieren`, `makro:3`) are
+in German.
+
+**Project status, guidelines and open tasks (German):** [`docs/UEBERGABE.md`](docs/UEBERGABE.md) · Protocol:
 [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
 
-## Bauen
+## Building
 
-Windows: [rustup](https://rustup.rs) und die Visual Studio Build Tools (Workload „Desktopentwicklung mit C++“).
+Windows: [rustup](https://rustup.rs) and the Visual Studio Build Tools (workload "Desktop development with C++").
 ```
 cargo build --release
 ```
-Die Programme liegen danach in `target\release\`.
+The programs are then in `target\release\`.
 
-Linux (Debian/Ubuntu): Rust per rustup, dazu für die Oberfläche
+Linux (Debian/Ubuntu): Rust via rustup, plus for the GUI
 `sudo apt install libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev`.
-Zugriff auf die Maus (`/dev/hidraw*`, ohne hidapi, der Kernel-Treiber bleibt aktiv):
+Access to the mouse (`/dev/hidraw*`, no hidapi; the kernel driver stays attached):
 ```
 sudo cp linux/70-m6980x-configtool.rules /etc/udev/rules.d/
 sudo udevadm control --reload && sudo udevadm trigger
 ```
 
-## Oberfläche
+## Graphical user interface
 
 ```
-m6980x_configtool_gui            # oder: m6980x_configtool gui
-m6980x_configtool_gui --fake     # Probelauf mit simulierter Maus
+m6980x_configtool_gui            # or: m6980x_configtool gui
+m6980x_configtool_gui --fake     # dry run against a simulated mouse
 ```
-Fünf Reiter: Übersicht (Profil, DPI-Stufe, Abtastrate, LED mit Farbvorschau, Live-Anzeige der Maustasten), DPI,
-Tasten, Makros (Editor mit Bild und Byte-Zähler, .ini-Import/-Export) und Sicherung (JSON, .meb, Freigeben).
-Alle Mauszugriffe laufen im Hintergrund. Unten protokolliert ein Log jeden Befehl.
+Five tabs: overview (profile, DPI stage, report rate, LED with colour preview, live display of the mouse buttons),
+DPI, buttons, macros (editor with picture and byte counter, `.ini` import/export) and backup (JSON, `.meb`, release
+all). All mouse access runs in the background; a log at the bottom records every command.
 
-## Kommandozeile
+## Command line
 
 ```
-m6980x_configtool info                 # Gerät, aktives Profil, DPI-Stufen, LED-Farben (--json)
-m6980x_configtool profile 2            # auf Profil 2 wechseln (1-3)
-m6980x_configtool led 2 orange         # Farbe für Profil 2 (Name oder R G B je 0-2)
-m6980x_configtool dpi                  # DPI-Stufen und aktive Stufe
-m6980x_configtool dpi select 2         # Stufe 2 aktivieren
-m6980x_configtool dpi set 1 1800 1200  # Stufe 1: X 1800, Y 1200 (90er-Schritte, max. 6030)
-m6980x_configtool dpi default          # Werkswerte 810/1620/3240 und 500 Hz
-m6980x_configtool watch                # Profil/DPI-Stufe live beobachten
+m6980x_configtool info                 # device, active profile, DPI stages, LED colours (--json)
+m6980x_configtool profile 2            # switch to profile 2 (1-3)
+m6980x_configtool led 2 orange         # colour of profile 2 (name or R G B, each 0-2)
+m6980x_configtool dpi                  # DPI stages and active stage
+m6980x_configtool dpi select 2         # activate stage 2
+m6980x_configtool dpi set 1 1800 1200  # stage 1: X 1800, Y 1200 (steps of 90, max. 6030)
+m6980x_configtool dpi default          # factory values 810/1620/3240 and 500 Hz
+m6980x_configtool watch                # watch profile/DPI stage live
 m6980x_configtool rate 500             # 1000/500/333/250/200/166/142/125 Hz
-m6980x_configtool buttons              # Tastenbelegung aller 3 Profile
-m6980x_configtool functions            # belegbare Funktionen
-m6980x_configtool button 1 hinten kopieren    # Profil 1, hintere Seitentaste = Strg+C
-m6980x_configtool button 1 vorne makro:3      # Taste auf Makro 3 legen
-m6980x_configtool button 1 vorne standard     # Taste wieder auf Grundfunktion
-m6980x_configtool macro 5 Test tippe strg+c, warte 100, klick links   # Makro 5 schreiben
-m6980x_configtool macro 6 Auto klick links, warte 50 --mode feuer      # Modus einmal/schleife/feuer
-m6980x_configtool macro 8 Kopie tippe strg+c --bild 12                # mit Vorschaubild 12
-m6980x_configtool macro-bild 1 4                 # nur das Bild ändern (1-100 oder keins)
-m6980x_configtool macro-export 1 klicker.ini     # Makro als Datei der Original-Software
+m6980x_configtool buttons              # button assignment of all 3 profiles
+m6980x_configtool functions            # assignable functions
+m6980x_configtool button 1 hinten kopieren    # profile 1, rear side button = Ctrl+C
+m6980x_configtool button 1 vorne makro:3      # put macro 3 on the front side button
+m6980x_configtool button 1 vorne standard     # back to the button's built-in function
+m6980x_configtool macro 5 Test tippe strg+c, warte 100, klick links   # write macro 5
+m6980x_configtool macro 6 Auto klick links, warte 50 --mode feuer      # mode einmal/schleife/feuer (once/loop/fire)
+m6980x_configtool macro 8 Kopie tippe strg+c --bild 12                # with preview picture 12
+m6980x_configtool macro-bild 1 4                 # change only the picture (1-100 or keins = none)
+m6980x_configtool macro-export 1 klicker.ini     # macro as a file of the original software
 m6980x_configtool macro-import 5 klicker.ini --name Klicker
-m6980x_configtool backup sicherung.json          # komplette Sicherung (Speicher + alle Einstellungen)
-m6980x_configtool restore sicherung.json         # zurückspielen (nur Abweichungen), dauerhaft speichern
-m6980x_configtool rom-dump sicherung.meb         # 8-KB-Speicher (.meb = Format des Originals, sonst roh)
-m6980x_configtool rom-import alt.meb             # Sicherung der Original-Software einspielen
-m6980x_configtool macros                         # Makro-Slots (oder: --rom datei.bin)
+m6980x_configtool backup backup.json             # full backup (memory + all settings)
+m6980x_configtool restore backup.json            # write back (differences only) and save permanently
+m6980x_configtool rom-dump backup.meb            # 8 KB memory (.meb = format of the original, otherwise raw)
+m6980x_configtool rom-import old.meb             # import a backup of the original software
+m6980x_configtool macros                         # macro slots (or: --rom file.bin)
 ```
-Abtastrate, DPI und aktives Profil werden automatisch dauerhaft gespeichert (`01 02`). Mit `--temporaer` gelten sie
-nur bis zum Abstecken. `--device <Pfad>` wählt ein bestimmtes Gerät (hidapi-Pfad bzw. `/dev/hidrawN`).
-Sicherungen des Python-Prototyps sind in beide Richtungen lesbar.
+Report rate, DPI and active profile are saved permanently (`01 02`) automatically. With `--temporaer` they only last
+until the mouse is unplugged. `--device <path>` selects a specific device (hidapi path or `/dev/hidrawN`).
+Backups of the Python prototype can be read in both directions.
 
-Die Original-Software (`Macro.exe`) und OpenRGB sollten nicht gleichzeitig laufen. Sie sprechen die Maus über
-denselben Kanal an und kennen die Sperre dieses Tools nicht.
+Do not run the original software (`Macro.exe`) or OpenRGB at the same time: they talk to the mouse over the same
+channel and do not know about this tool's lock.
 
 ## Tests
 
 ```
 cargo test --workspace
 ```
-* Port aller Unit-Tests des Prototyps mit simulierter Maus (`crates/m6980x-core/src/fake.rs`)
-* **Paritätstests:** `prototype/python/tools/export_fixtures.py` spielt Szenarien (alle Einstellungen, DPI, jede
-  Funktion auf normaler und Radtaste, Makros, Freigeben, Wiederherstellen, Import) gegen den Python-Prototyp und
-  schreibt `tests/fixtures/parity.json`. Rust muss dieselben 6423 Pakete senden, dasselbe ROM hinterlassen und
-  bytegleiche `.meb`-/`.ini`-Dateien schreiben.
-* Vorhandene Sicherungen lesen: `M6980X_BACKUP_DIR=<Ordner> cargo test -- --ignored`
+* Port of all unit tests of the prototype, using a simulated mouse (`crates/m6980x-core/src/fake.rs`)
+* **Parity tests:** `prototype/python/tools/export_fixtures.py` runs scenarios (all settings, DPI, every function on
+  a normal and a wheel button, macros, release all, restore, import) against the Python prototype and writes
+  `tests/fixtures/parity.json`. Rust must send the same 6423 packets, leave the same ROM and write byte-identical
+  `.meb`/`.ini` files.
+* Read existing backups: `M6980X_BACKUP_DIR=<folder> cargo test -- --ignored`
 
-## Aufbau
+## Layout
 
-| Pfad | Inhalt |
+| Path | Contents |
 |---|---|
-| `crates/m6980x-core/` | Bibliothek: Transport (Windows hidapi, Linux hidraw, Sperre), Protokoll, ROM-Layout, Funktionen, Sicherung |
-| `crates/m6980x-cli/` | Kommandozeile `m6980x_configtool` |
-| `crates/m6980x-gui/` | Oberfläche `m6980x_configtool_gui` |
-| `docs/PROTOCOL.md` | Protokoll mit Belegstufen |
-| `assets/icon_descriptions.json` | Texte zu den Makrobildern (Grundlage für eigene Symbole, keine Gigabyte-Bilder) |
-| `linux/` | udev-Regel |
-| `prototype/python/` | Python-Prototyp 1.1 (Referenz, Quelle der Paritäts-Fixtures) |
+| `crates/m6980x-core/` | Library: transport (Windows hidapi, Linux hidraw, lock), protocol, ROM layout, functions, backup |
+| `crates/m6980x-cli/` | Command line `m6980x_configtool` |
+| `crates/m6980x-gui/` | GUI `m6980x_configtool_gui` |
+| `docs/PROTOCOL.md` | Protocol with levels of evidence (German) |
+| `assets/icon_descriptions.json` | Descriptions of the macro pictures (basis for own icons, no Gigabyte images) |
+| `linux/` | udev rule |
+| `prototype/python/` | Python prototype 1.1 (reference, source of the parity fixtures) |
 
-## Lizenz
+## License
 
-GPL-2.0-or-later (siehe [`LICENSE`](LICENSE)), passend zu OpenRGB. Die Gigabyte-Software und ihre Bilder sind nicht
-Teil dieses Repos.
+GPL-2.0-or-later (see [`LICENSE`](LICENSE)), matching OpenRGB. Gigabyte's software and its images are not part of this
+repository.
