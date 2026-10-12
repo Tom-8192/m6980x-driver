@@ -69,6 +69,12 @@ pub fn macro_slot(rom: &[u8], slot: usize) -> &[u8] {
     &rom[start..start + MACRO_SLOT_SIZE]
 }
 
+/// Record of a slot in use, empty for a free slot. Like the original, a slot without a name is free:
+/// "Release" only clears name byte 0, the old data and icon byte stay in the ROM.
+pub fn used_macro_slot(rom: &[u8], slot: usize) -> &[u8] {
+    if macro_name(macro_info(rom, slot)).is_empty() { &[] } else { macro_slot(rom, slot) }
+}
+
 pub fn printable(data: &[u8]) -> String {
     data.iter().map(|&c| if (32..127).contains(&c) { c as char } else { '.' }).collect()
 }
@@ -110,6 +116,18 @@ mod tests {
         let klicker_info = [0x4b, 0x6c, 0x69, 0x63, 0x6b, 0x65, 0x72, 0x00, 0x2c, 0x68]; // real, confirmed by Tom
         assert_eq!(macro_icon(&klicker_info), Some(4));
         assert_eq!(macro_name(&klicker_info), "Klicker");
+    }
+
+    #[test]
+    fn released_slot_is_free() {
+        let mut rom = vec![0xFF; 0x2000];
+        let (data, info) = (macro_slot_addr(1) as usize, macro_info_addr(1) as usize);
+        rom[data..data + 4].copy_from_slice(&[0x05, 0x83, 0x17, 0x00]);
+        rom[info..info + 3].copy_from_slice(b"ab\0");
+        assert_eq!(used_macro_slot(&rom, 1)[..4], [0x05, 0x83, 0x17, 0x00]);
+        rom[info] = 0x00; // "Release"
+        assert!(used_macro_slot(&rom, 1).is_empty());
+        assert!(used_macro_slot(&rom, 2).is_empty()); // never written (erased)
         assert_eq!(icon_source(4), "eingebaut");
         assert_eq!(icon_source(41), "eigenes bmp\\1.bmp");
         let mut new_macro = [0u8; 10];

@@ -613,8 +613,9 @@ impl App {
         self.selected_macro = Some(s);
         self.m_slot = s + 1;
         self.m_name = romlayout::macro_name(info);
-        self.m_icon = romlayout::macro_icon(info);
-        self.set_editor(romlayout::macro_slot(&rom, s));
+        let record = romlayout::used_macro_slot(&rom, s);
+        self.m_icon = if record.is_empty() { None } else { romlayout::macro_icon(info) };
+        self.set_editor(record);
     }
 
     fn ui_macros(&mut self, ui: &mut egui::Ui) {
@@ -628,7 +629,7 @@ impl App {
                 ui.end_row();
                 if let Some(rom) = &self.macro_rom {
                     for s in 0..MACRO_SLOTS {
-                        let slot = romlayout::macro_slot(rom, s);
+                        let slot = romlayout::used_macro_slot(rom, s);
                         let info = romlayout::macro_info(rom, s);
                         let (mode, events) = fnc::decode_record(slot);
                         let selected = self.selected_macro == Some(s);
@@ -636,7 +637,7 @@ impl App {
                             clicked = Some(s);
                         }
                         ui.label(romlayout::macro_name(info));
-                        ui.label(format_icon(romlayout::macro_icon(info)));
+                        ui.label(if slot.is_empty() { "-".into() } else { format_icon(romlayout::macro_icon(info)) });
                         ui.label(mode.unwrap_or_else(|| "-".into()));
                         ui.label(fnc::record_length(slot).to_string());
                         ui.add(egui::Label::new(events.join(", ")).truncate());

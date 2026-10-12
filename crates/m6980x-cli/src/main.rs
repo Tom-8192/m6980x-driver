@@ -587,13 +587,13 @@ fn read_full_rom(g: &mut G) -> Result<Vec<u8>> {
 
 fn print_macros(data: &[u8]) {
     for s in 0..romlayout::MACRO_SLOTS {
-        let slot = romlayout::macro_slot(data, s);
+        let slot = romlayout::used_macro_slot(data, s);
+        if slot.is_empty() {
+            continue;
+        }
         let (mode, events) = fnc::decode_record(slot);
         let info = romlayout::macro_info(data, s);
         let name = romlayout::macro_name(info);
-        if mode.is_none() && name.is_empty() {
-            continue;
-        }
         let events = if events.is_empty() { tr!("cli.no_events") } else { events.join(", ") };
         println!(
             "{:9} {:12} {:30} {:3}/{MACRO_SLOT_SIZE} B  {} {:9} {events}",
