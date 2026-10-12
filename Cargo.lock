@@ -1080,6 +1080,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-phosphor"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f4299551488dddaa8f757727e1eb4ffdaf277ffe6e30b413403468f5ecf4634"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "egui-wgpu"
 version = "0.36.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2119,7 +2128,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "m6980x-cli"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "chrono",
  "clap",
@@ -2130,7 +2139,7 @@ dependencies = [
 
 [[package]]
 name = "m6980x-core"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "chrono",
  "hidapi",
@@ -2145,9 +2154,10 @@ dependencies = [
 
 [[package]]
 name = "m6980x-gui"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "eframe",
+ "egui-phosphor",
  "m6980x-core",
  "rfd",
  "serde_json",

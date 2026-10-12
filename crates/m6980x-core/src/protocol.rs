@@ -503,12 +503,26 @@ impl<T: Transport> M6980X<T> {
 
     /// Write and verify. Blocks never cross a 32-byte boundary.
     pub fn write_rom(&mut self, addr: u16, data: &[u8], bytewise: bool) -> Result<()> {
+        self.write_rom_progress(addr, data, bytewise, &mut |_, _| {})
+    }
+
+    /// `write_rom` with progress (done, total): writing counts the bytes, the verify read follows,
+    /// total = 2 × length.
+    pub fn write_rom_progress(
+        &mut self,
+        addr: u16,
+        data: &[u8],
+        bytewise: bool,
+        progress: &mut dyn FnMut(usize, usize),
+    ) -> Result<()> {
+        let total = 2 * data.len();
         if usize::from(addr) + data.len() > ROM_SIZE {
             return invalid(tr!("error.write_outside_rom"));
         }
         if bytewise {
             for (i, &b) in data.iter().enumerate() {
                 self.write_rom_byte(addr + i as u16, b)?;
+                progress(i + 1, total);
             }
         } else {
             let mut pos = 0;
@@ -521,9 +535,11 @@ impl<T: Transport> M6980X<T> {
                     _ => self.write_rom_block(a, &data[pos..pos + n])?,
                 }
                 pos += n;
+                progress(pos, total);
             }
         }
-        let actual = self.read_rom(addr, data.len())?;
+        let n = data.len();
+        let actual = self.read_rom_progress(addr, n, &mut |done, _| progress(n + done, total))?;
         if actual != data {
             return device(tr!("error.rom_not_written", addr = format!("{addr:04X}"), actual = hex(&actual)));
         }
@@ -567,6 +583,19 @@ impl<T: Transport> M6980X<T> {
     /// (icon byte, name max. 9 characters) - same order as the original.
     /// icon: icon 1-100; None keeps an icon already chosen for this slot.
     pub fn write_macro(&mut self, slot: usize, record: &[u8], name: &str, icon: Option<u8>) -> Result<()> {
+        self.write_macro_progress(slot, record, name, icon, &mut |_, _| {})
+    }
+
+    /// `write_macro` with progress (done, total) of writing and verifying the record, which is
+    /// nearly all of the time.
+    pub fn write_macro_progress(
+        &mut self,
+        slot: usize,
+        record: &[u8],
+        name: &str,
+        icon: Option<u8>,
+        progress: &mut dyn FnMut(usize, usize),
+    ) -> Result<()> {
         Self::check_slot(slot)?;
         if !(2..=romlayout::MACRO_SLOT_SIZE).contains(&record.len()) || record.last() != Some(&0x00) {
             return invalid(tr!("error.macro_format", macro_slot_size = romlayout::MACRO_SLOT_SIZE));
@@ -585,7 +614,7 @@ impl<T: Transport> M6980X<T> {
             Some(i) => Some(i),
             None => romlayout::macro_icon(&self.read_rom(info, romlayout::MACRO_INFO_SIZE)?),
         };
-        self.write_rom(romlayout::macro_slot_addr(slot), record, true)?;
+        self.write_rom_progress(romlayout::macro_slot_addr(slot), record, true, progress)?;
         self.set_macro_icon(slot, icon)?;
         let mut padded = raw_name;
         padded.resize(romlayout::MACRO_NAME_LEN, 0);

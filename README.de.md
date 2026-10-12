@@ -20,7 +20,7 @@ Jeder Schreibvorgang wird zurückgelesen. Die Pakete sind bytegleich mit dem am 
 Neu gegenüber dem Prototyp ist eine **prozessübergreifende Sperre**: Oberfläche und Kommandozeile dürfen gleichzeitig
 laufen. Unter Linux baut das Tool und besteht alle Tests, ist aber noch nicht an der Maus getestet.
 
-**Sprachen:** Englisch und Deutsch. Die Oberfläche hat oben rechts eine Sprachauswahl (wird gemerkt), die
+**Sprachen:** Englisch und Deutsch. Die Oberfläche hat in den Einstellungen (unten links) eine Sprachauswahl (wird gemerkt), die
 Kommandozeile nimmt `--lang en|de`. Ohne Angabe entscheidet `M6980X_LANG` oder die Systemsprache (deutsches System →
 Deutsch, sonst Englisch). Eingaben gehen in beiden Sprachen, mit und ohne Umlaute: `button 1 hinten kopieren` wie
 `button 1 back copy`, Makrotext `tippe strg+c, warte 100` wie `tap ctrl+c, wait 100`, `drück` wie `drueck`.

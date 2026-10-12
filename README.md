@@ -21,7 +21,7 @@ tested on the device under Windows.
 New compared to the prototype is a **cross-process lock**: the GUI and the command line can run at the same time.
 On Linux the tool builds and passes all tests but has not yet been tested with the mouse.
 
-**Languages:** English and German. The GUI has a language switch (top right, remembered); the command line takes
+**Languages:** English and German. The GUI has a language switch (settings, bottom left; remembered); the command line takes
 `--lang en|de`. Without a choice, `M6980X_LANG` or the system language decides (German system → German, otherwise
 English). Input is understood in both languages, e.g. `button 1 back copy` and `button 1 hinten kopieren`, or the
 macro text `tap ctrl+c, wait 100` and `tippe strg+c, warte 100`. Key names follow the German QWERTZ layout (y and z

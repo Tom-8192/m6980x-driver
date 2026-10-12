@@ -54,6 +54,37 @@ OEM **Areson**): lightweight, no installation, **Windows first, always keep Linu
 - GUI: **checkbox "Link X and Y"** on the DPI tab (2026-10-12): Y follows X and is locked; turning it on sets Y = X;
   stored. If the mouse reports different X/Y values, the checkbox is cleared so Y stays visible.
 - GUI played through with `--fake` (tabs, read/write macros, byte counter, error dialog).
+
+### GUI redesign 2.2 (2026-10-12)
+
+Tom's decisions: side bar + header with profile buttons, changes apply at once (no "Set" buttons), macro editor with
+step list, text view and recording, drawn mouse on the buttons page (based on a product photo Tom showed: centre strip
+with tilt wheel, three LED bars, DPI and profile button, two side buttons on the left – **drawn with shapes, no product
+images**).
+
+- `crates/m6980x-gui/src/`: `main.rs` (frame: side bar, header, status bar, settings dialog), `app.rs` (state and all
+  mouse actions as worker jobs), `pages/*.rs` (one page each: overview, buttons, lighting, DPI, performance, macros,
+  backup), `theme.rs` (dark/light colours, stored like the language), `widgets.rs` (cards, segmented buttons, swatches,
+  two-column layout that stacks when narrow), `mouse_art.rs` (vector mouse with hit regions), `recorder.rs` +
+  `hid_keys.rs` (macro recording), `worker.rs` (unchanged apart from the connection state). Icons: `egui-phosphor`.
+- Header profile button = activate the profile on the mouse **and** edit its buttons (like the original); the live
+  display follows presses of the profile/DPI button. Disconnected mouse: red dot, quiet reconnect every 1.5 s.
+- Instant apply: profile, DPI stage, rate, LED colour, button assignment write on click; DPI values when the slider is
+  released or a typed value is done (not while dragging). Macros/ROM are still written with an explicit button.
+  "Save permanently" (01 02) after profile/DPI/rate as before (checkbox on the performance page).
+- Macro steps: `m6980x_core::macro_steps` (`Step`, `steps_from_events`, `events_from_steps`, `fit`) – byte format of
+  `encode_events`/`decode_record`, unknown bytes are kept (`Step::Raw`).
+- Recording: keys anywhere in the window (egui 0.36 delivers physical keys incl. Ctrl/Shift/Alt/Win/AltGr; Ctrl+C/X/V
+  arrive as copy/cut/paste events and are mapped back), mouse buttons and wheel only inside the recording field;
+  real pauses or a fixed pause; stops when the slot is full and never leaves a key pressed. While recording, key
+  events are taken out of egui's input and no widget keeps the focus.
+- Macro jobs show progress (`App::run_tracked`, banner above the editor buttons, percent in the status bar) and a
+  success message; the core reports progress via `write_rom_progress` / `write_macro_progress` (same packets).
+  After writing, only the slot and the info table are read back (not 8 KB). Empty name → "Macro <slot>".
+- Key names extended: `f13`–`f24`, German punctuation positions (`ü ö ä # ^ , . - <`, caps lock, numpad plus) and
+  `0xNN` for any usage, so recorded macros and the text view always round-trip.
+- Checked with `--fake` via screenshots (all pages, German/English, light/dark, narrow window); recorder covered by unit
+  tests. **Not yet clicked through by hand and not yet tried on the real mouse.**
 - Linux: compiles (cross-check `x86_64-unknown-linux-gnu`), not yet run with the mouse.
 
 ### Python prototype 1.1
@@ -128,7 +159,7 @@ OEM **Areson**): lightweight, no installation, **Windows first, always keep Linu
    ignores the busy/done handshake, sends LED values 0–255 instead of 0–2 and switches the profile when changing the
    colour. Correct would be: only `01 86 <profile> R G B` with handshake, without init.
 3. **Own icons** created with an image AI from `assets/icon_descriptions.json` and shown in the GUI.
-4. Refine the GUI (Tom has not judged it yet), possibly macro recording like the original.
+4. GUI 2.2 (see above): Tom to try it by hand and on the mouse (recording, instant apply, reconnect).
 5. Keyboard layout of the macro text: key names follow the German layout in every UI language (y/z swapped);
    possibly an option for other layouts.
 6. Smaller open questions (❓ in PROTOCOL.md): rest of the config area from 0x1F85, meaning of the bytes after the info

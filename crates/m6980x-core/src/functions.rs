@@ -57,11 +57,13 @@ pub static KEYS: LazyLock<Vec<(String, u8)>> = LazyLock::new(|| {
     keys[(b'z' - b'a') as usize].1 = 0x1C;
     keys.extend((0..10u8).map(|d| (d.to_string(), 0x1E + (d + 9) % 10)));
     keys.extend((1..=12u8).map(|n| (format!("f{n}"), 0x3A + n - 1)));
+    keys.extend((13..=24u8).map(|n| (format!("f{n}"), 0x68 + n - 13)));
     keys
 });
 
 /// Named keys (id, usage); names per language in locales/ under `key.<id>`.
-pub const NAMED_KEYS: [(&str, u8); 28] = [
+/// The punctuation ids name the character of the German layout at that position.
+pub const NAMED_KEYS: [(&str, u8); 40] = [
     ("enter", 0x28),
     ("esc", 0x29),
     ("backspace", 0x2A),
@@ -69,6 +71,16 @@ pub const NAMED_KEYS: [(&str, u8); 28] = [
     ("space", 0x2C),
     ("minus", 0x2D),
     ("plus", 0x2E),
+    ("ue", 0x2F),
+    ("asterisk", 0x30),
+    ("hash", 0x31),
+    ("oe", 0x33),
+    ("ae", 0x34),
+    ("caret", 0x35),
+    ("comma", 0x36),
+    ("period", 0x37),
+    ("dash", 0x38),
+    ("capslock", 0x39),
     ("print", 0x46),
     ("scrolllock", 0x47),
     ("pause", 0x48),
@@ -82,6 +94,8 @@ pub const NAMED_KEYS: [(&str, u8); 28] = [
     ("left", 0x50),
     ("down", 0x51),
     ("up", 0x52),
+    ("numplus", 0x57),
+    ("less", 0x64),
     ("ctrl", 0xE0),
     ("shift", 0xE1),
     ("alt", 0xE2),
@@ -92,12 +106,13 @@ pub const NAMED_KEYS: [(&str, u8); 28] = [
     ("win-r", 0xE7),
 ];
 
-/// Key name (any language) -> HID usage.
+/// Key name (any language) or `0xNN` (as `decode_record` shows keys without a name) -> HID usage.
 pub fn key(name: &str) -> Option<u8> {
     KEYS.iter()
         .find(|(n, _)| n == name)
         .map(|&(_, v)| v)
         .or_else(|| NAMED_KEYS.iter().find(|(id, _)| is_named("key", id, name)).map(|&(_, v)| v))
+        .or_else(|| name.strip_prefix("0x").filter(|h| h.len() == 2).and_then(|h| u8::from_str_radix(h, 16).ok()))
 }
 
 /// Display name of a HID usage in the current language.
@@ -512,6 +527,19 @@ mod tests {
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn unnamed_keys_round_trip_as_hex() {
+        assert_eq!(key("0x87"), Some(0x87));
+        assert_eq!(key("0x"), None);
+        let events = encode_events("tippe 0x87, tippe ü, tippe komma, tippe f13").unwrap();
+        assert_eq!(
+            events,
+            [0x83, 0x87, 0x84, 0x87, 0x83, 0x2F, 0x84, 0x2F, 0x83, 0x36, 0x84, 0x36, 0x83, 0x68, 0x84, 0x68]
+        );
+        let (_, text) = decode_record(&[&[MODE_ONCE][..], &events, &[EV_END]].concat());
+        assert_eq!(encode_events(&text.join(", ")).unwrap(), events);
     }
 
     #[test]

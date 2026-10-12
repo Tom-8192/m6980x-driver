@@ -7,7 +7,7 @@ use std::thread;
 use m6980x_core::fake::FakeMouse;
 use m6980x_core::{M6980X, Result, Transport, open_transport};
 
-use crate::App;
+use crate::app::App;
 
 pub type G = M6980X<Box<dyn Transport>>;
 pub type Apply = Box<dyn FnOnce(&mut App) + Send>;
@@ -23,6 +23,8 @@ pub struct Done {
     pub label: String,
     pub quiet: bool,
     pub result: std::result::Result<Apply, String>,
+    /// the mouse is open after the job (an error closes it until the next job)
+    pub connected: bool,
 }
 
 /// Simulated mouse with an empty memory (like a freshly erased mouse) for the dry run without a device.
@@ -58,7 +60,12 @@ impl Device {
                 if result.is_err() && !fake {
                     g = None; // reconnect on the next job
                 }
-                let done = Done { label: req.label, quiet: req.quiet, result: result.map_err(|e| e.to_string()) };
+                let done = Done {
+                    label: req.label,
+                    quiet: req.quiet,
+                    result: result.map_err(|e| e.to_string()),
+                    connected: g.is_some(),
+                };
                 if done_tx.send(done).is_err() {
                     break;
                 }

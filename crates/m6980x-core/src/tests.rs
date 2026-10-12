@@ -198,6 +198,17 @@ fn write_macro_like_original() {
 }
 
 #[test]
+fn write_macro_reports_progress() {
+    let mut g = mouse();
+    let record = h("04 83 17 84 17 00");
+    let mut seen = Vec::new();
+    g.write_macro_progress(2, &record, "Hallo", None, &mut |done, total| seen.push((done, total))).unwrap();
+    assert_eq!(seen.first(), Some(&(1, 12)));
+    assert_eq!(seen.last(), Some(&(12, 12)));
+    assert!(seen.windows(2).all(|w| w[0].0 <= w[1].0));
+}
+
+#[test]
 fn write_macro_keeps_chosen_picture() {
     let mut g = mouse();
     let info9 = 0x1CC1 + 9; // icon byte slot 0
