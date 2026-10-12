@@ -2119,7 +2119,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "m6980x-cli"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "chrono",
  "clap",
@@ -2130,7 +2130,7 @@ dependencies = [
 
 [[package]]
 name = "m6980x-core"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "chrono",
  "hidapi",
@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "m6980x-gui"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "eframe",
  "m6980x-core",
