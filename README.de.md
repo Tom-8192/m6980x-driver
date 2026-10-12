@@ -20,6 +20,17 @@ Jeder Schreibvorgang wird zurückgelesen. Die Pakete sind bytegleich mit dem am 
 Neu gegenüber dem Prototyp ist eine **prozessübergreifende Sperre**: Oberfläche und Kommandozeile dürfen gleichzeitig
 laufen. Unter Linux baut das Tool und besteht alle Tests, ist aber noch nicht an der Maus getestet.
 
+**Sprachen:** Englisch und Deutsch. Die Oberfläche hat oben rechts eine Sprachauswahl (wird gemerkt), die
+Kommandozeile nimmt `--lang en|de`. Ohne Angabe entscheidet `M6980X_LANG` oder die Systemsprache (deutsches System →
+Deutsch, sonst Englisch). Eingaben gehen in beiden Sprachen, mit und ohne Umlaute: `button 1 hinten kopieren` wie
+`button 1 back copy`, Makrotext `tippe strg+c, warte 100` wie `tap ctrl+c, wait 100`, `drück` wie `drueck`.
+
+**Weitere Sprache:** Alle Texte (Ausgaben, Hilfe, Oberfläche, Tasten-, Farb- und Funktionsnamen) stehen in
+`locales/<code>.yml`, eine Datei pro Sprache, beim Bauen eingebettet. `locales/en.yml` z. B. nach `locales/fr.yml`
+kopieren, die Werte übersetzen, neu bauen – ohne Codeänderung. Platzhalter wie `%{name}` müssen bleiben; ein Eintrag
+`"space|leer"` heißt Anzeigename plus weitere erlaubte Eingabe. `cargo test` prüft, dass jede Sprachdatei alle
+Schlüssel und dieselben Platzhalter hat.
+
 **Projektstand, Vorgaben und offene Aufgaben:** [`docs/UEBERGABE.md`](docs/UEBERGABE.md) · Protokoll:
 [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
 
@@ -44,6 +55,7 @@ sudo udevadm control --reload && sudo udevadm trigger
 ```
 m6980x_configtool_gui            # oder: m6980x_configtool gui
 m6980x_configtool_gui --fake     # Probelauf mit simulierter Maus
+m6980x_configtool_gui --lang de  # auf Deutsch starten
 ```
 Fünf Reiter: Übersicht (Profil, DPI-Stufe, Abtastrate, LED mit Farbvorschau, Live-Anzeige der Maustasten), DPI,
 Tasten, Makros (Editor mit Bild und Byte-Zähler, .ini-Import/-Export) und Sicherung (JSON, .meb, Freigeben).
@@ -68,17 +80,18 @@ m6980x_configtool button 1 vorne makro:3      # Taste auf Makro 3 legen
 m6980x_configtool button 1 vorne standard     # Taste wieder auf Grundfunktion
 m6980x_configtool macro 5 Test tippe strg+c, warte 100, klick links   # Makro 5 schreiben
 m6980x_configtool macro 6 Auto klick links, warte 50 --mode feuer      # Modus einmal/schleife/feuer
-m6980x_configtool macro 8 Kopie tippe strg+c --bild 12                # mit Vorschaubild 12
-m6980x_configtool macro-bild 1 4                 # nur das Bild ändern (1-100 oder keins)
+m6980x_configtool macro 8 Kopie tippe strg+c --icon 12                # mit Vorschaubild 12 (auch --bild)
+m6980x_configtool macro-icon 1 4                 # nur das Bild ändern (1-100 oder keins; auch macro-bild)
 m6980x_configtool macro-export 1 klicker.ini     # Makro als Datei der Original-Software
 m6980x_configtool macro-import 5 klicker.ini --name Klicker
+m6980x_configtool --lang en buttons              # Ausgabe auf Englisch
 m6980x_configtool backup sicherung.json          # komplette Sicherung (Speicher + alle Einstellungen)
 m6980x_configtool restore sicherung.json         # zurückspielen (nur Abweichungen), dauerhaft speichern
 m6980x_configtool rom-dump sicherung.meb         # 8-KB-Speicher (.meb = Format des Originals, sonst roh)
 m6980x_configtool rom-import alt.meb             # Sicherung der Original-Software einspielen
 m6980x_configtool macros                         # Makro-Slots (oder: --rom datei.bin)
 ```
-Abtastrate, DPI und aktives Profil werden automatisch dauerhaft gespeichert (`01 02`). Mit `--temporaer` gelten sie
+Abtastrate, DPI und aktives Profil werden automatisch dauerhaft gespeichert (`01 02`). Mit `--temporary` (auch `--temporaer`) gelten sie
 nur bis zum Abstecken. `--device <Pfad>` wählt ein bestimmtes Gerät (hidapi-Pfad bzw. `/dev/hidrawN`).
 Sicherungen des Python-Prototyps sind in beide Richtungen lesbar.
 
@@ -106,6 +119,7 @@ cargo test --workspace
 | `crates/m6980x-gui/` | Oberfläche `m6980x_configtool_gui` |
 | `docs/PROTOCOL.md` | Protokoll mit Belegstufen |
 | `assets/icon_descriptions.json` | Texte zu den Makrobildern (Grundlage für eigene Symbole, keine Gigabyte-Bilder) |
+| `locales/` | Übersetzungen, eine YAML-Datei pro Sprache |
 | `linux/` | udev-Regel |
 | `prototype/python/` | Python-Prototyp 1.1 (Referenz, Quelle der Paritäts-Fixtures) |
 

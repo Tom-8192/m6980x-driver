@@ -5,6 +5,7 @@
 
 pub mod backup;
 pub mod functions;
+pub mod i18n;
 pub mod names;
 pub mod protocol;
 pub mod rom;

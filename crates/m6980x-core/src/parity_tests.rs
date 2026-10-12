@@ -31,6 +31,11 @@ fn long_macro() -> String {
     std::iter::repeat_n(LONG_MACRO_PARTS.join(", "), 6).collect::<Vec<_>>().join(", ")
 }
 
+/// Der Prototyp schreibt Umlaute als ae/oe/ue/ss, Rust zeigt sie.
+fn ascii(text: &str) -> String {
+    text.replace('ä', "ae").replace('ö', "oe").replace('ü', "ue").replace('ß', "ss")
+}
+
 fn fixture() -> Value {
     serde_json::from_str(FIXTURE).expect("parity.json")
 }
@@ -217,7 +222,7 @@ fn macro_text_encoding_matches() {
                 let want = case["error"].as_str().unwrap();
                 // Pythons int()-Fehlertexte haben keine deutsche Entsprechung
                 if !want.starts_with("invalid literal") {
-                    assert_eq!(e.to_string(), want, "{text}");
+                    assert_eq!(ascii(&e.to_string()), want, "{text}");
                 }
             }
             (got, _) => panic!("{text}: Rust {got:?}, Python {case}"),
@@ -231,7 +236,9 @@ fn macro_decoding_matches() {
     for case in fixture()["decode"].as_array().unwrap() {
         let data = h(case["hex"].as_str().unwrap());
         let (mode, events) = fnc::decode_record(&data);
-        assert_eq!(serde_json::json!(mode), case["mode"], "{case}");
+        // Der Prototyp schreibt Umlaute als ae/oe/ue ("drueck"), Rust zeigt sie ("drück").
+        let events: Vec<String> = events.iter().map(|e| ascii(e)).collect();
+        assert_eq!(serde_json::json!(mode.as_deref().map(ascii)), case["mode"], "{case}");
         assert_eq!(serde_json::json!(events), case["events"], "{case}");
         assert_eq!(fnc::record_length(&data), case["length"].as_u64().unwrap() as usize, "{case}");
     }

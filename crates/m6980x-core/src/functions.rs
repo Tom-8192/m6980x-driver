@@ -5,14 +5,16 @@
 
 use std::sync::LazyLock;
 
-use crate::{Result, invalid};
+use crate::i18n::{self, fold};
+use crate::{Result, invalid, tr};
 
 pub const FUNCTION_BASE: u16 = 0x1D8C;
 
 pub const MODE_ONCE: u8 = 0x04;
 pub const MODE_LOOP: u8 = 0x05;
 pub const MODE_HOLD: u8 = 0x06;
-pub const MODE_NAMES: [(&str, u8); 3] = [("einmal", MODE_ONCE), ("schleife", MODE_LOOP), ("feuer", MODE_HOLD)];
+/// (Kennung, Modusbyte); Namen in locales/ unter `mode.<Kennung>`
+pub const MODES: [(&str, u8); 3] = [("once", MODE_ONCE), ("loop", MODE_LOOP), ("fire", MODE_HOLD)];
 
 pub const EV_END: u8 = 0x00;
 pub const EV_KEY_DOWN: u8 = 0x83;
@@ -28,63 +30,82 @@ pub const EV_WHEEL: u8 = 0x60;
 /// Der Editor des Originals (0x410ae8) schreibt nur diese beiden.
 pub const EV_WHEEL_UP: u8 = 0x61;
 pub const EV_WHEEL_DOWN: u8 = 0x7F;
+/// (Kennung, Maske); Namen in locales/ unter `mouse.<Kennung>`
 pub const MOUSE_BUTTONS: [(&str, u8); 5] =
-    [("links", 0x01), ("rechts", 0x02), ("mitte", 0x04), ("zurueck", 0x08), ("vor", 0x10)];
+    [("left", 0x01), ("right", 0x02), ("middle", 0x04), ("back", 0x08), ("forward", 0x10)];
 
+/// Ist `input` die Kennung oder ein Name (in irgendeiner Sprache) des Eintrags `<group>.<id>`?
+fn is_named(group: &str, id: &str, input: &str) -> bool {
+    id == fold(input) || i18n::matches(&format!("{group}.{id}"), input)
+}
+
+/// Modusname (jede Sprache) -> Modusbyte.
 pub fn mode_value(name: &str) -> Option<u8> {
-    MODE_NAMES.iter().find(|(n, _)| *n == name).map(|&(_, v)| v)
+    MODES.iter().find(|(id, _)| is_named("mode", id, name)).map(|&(_, v)| v)
+}
+
+/// Namen der drei Modi in der aktuellen Sprache.
+pub fn mode_names() -> Vec<String> {
+    MODES.iter().map(|(id, _)| i18n::name(&format!("mode.{id}"))).collect()
 }
 
 /// HID-Tastatur-Usages (USB HID Usage Tables, Seite 0x07). Usages sind Tasten*positionen* einer US-Tastatur;
-/// die Namen hier folgen dem deutschen QWERTZ-Layout, bei dem Y und Z vertauscht sind.
-/// Reihenfolge zaehlt: bei doppelten Codes gewinnt beim Anzeigen der erste Name.
+/// die Buchstaben folgen dem deutschen QWERTZ-Layout, bei dem Y und Z vertauscht sind.
 pub static KEYS: LazyLock<Vec<(String, u8)>> = LazyLock::new(|| {
     let mut keys: Vec<(String, u8)> = (0..26u8).map(|i| (((b'a' + i) as char).to_string(), 0x04 + i)).collect();
     keys[(b'y' - b'a') as usize].1 = 0x1D; // deutsches y = US-z-Position
     keys[(b'z' - b'a') as usize].1 = 0x1C;
     keys.extend((0..10u8).map(|d| (d.to_string(), 0x1E + (d + 9) % 10)));
     keys.extend((1..=12u8).map(|n| (format!("f{n}"), 0x3A + n - 1)));
-    let named: &[(&str, u8)] = &[
-        ("enter", 0x28),
-        ("esc", 0x29),
-        ("backspace", 0x2A),
-        ("tab", 0x2B),
-        ("space", 0x2C),
-        ("leer", 0x2C),
-        ("minus", 0x2D),
-        ("plus", 0x2E),
-        ("druck", 0x46),
-        ("rollen", 0x47),
-        ("pause", 0x48),
-        ("einfg", 0x49),
-        ("pos1", 0x4A),
-        ("bildauf", 0x4B),
-        ("entf", 0x4C),
-        ("ende", 0x4D),
-        ("bildab", 0x4E),
-        ("rechts", 0x4F),
-        ("links", 0x50),
-        ("runter", 0x51),
-        ("hoch", 0x52),
-        ("strg", 0xE0),
-        ("shift", 0xE1),
-        ("alt", 0xE2),
-        ("win", 0xE3),
-        ("strg-r", 0xE4),
-        ("shift-r", 0xE5),
-        ("altgr", 0xE6),
-        ("win-r", 0xE7),
-    ];
-    keys.extend(named.iter().map(|&(n, v)| (n.to_string(), v)));
     keys
 });
 
+/// Benannte Tasten (Kennung, Usage); Namen je Sprache in locales/ unter `key.<Kennung>`.
+pub const NAMED_KEYS: [(&str, u8); 28] = [
+    ("enter", 0x28),
+    ("esc", 0x29),
+    ("backspace", 0x2A),
+    ("tab", 0x2B),
+    ("space", 0x2C),
+    ("minus", 0x2D),
+    ("plus", 0x2E),
+    ("print", 0x46),
+    ("scrolllock", 0x47),
+    ("pause", 0x48),
+    ("insert", 0x49),
+    ("home", 0x4A),
+    ("pageup", 0x4B),
+    ("delete", 0x4C),
+    ("end", 0x4D),
+    ("pagedown", 0x4E),
+    ("right", 0x4F),
+    ("left", 0x50),
+    ("down", 0x51),
+    ("up", 0x52),
+    ("ctrl", 0xE0),
+    ("shift", 0xE1),
+    ("alt", 0xE2),
+    ("win", 0xE3),
+    ("ctrl-r", 0xE4),
+    ("shift-r", 0xE5),
+    ("altgr", 0xE6),
+    ("win-r", 0xE7),
+];
+
+/// Tastenname (jede Sprache) -> HID-Usage.
 pub fn key(name: &str) -> Option<u8> {
-    KEYS.iter().find(|(n, _)| n == name).map(|&(_, v)| v)
+    KEYS.iter()
+        .find(|(n, _)| n == name)
+        .map(|&(_, v)| v)
+        .or_else(|| NAMED_KEYS.iter().find(|(id, _)| is_named("key", id, name)).map(|&(_, v)| v))
 }
 
-pub fn key_name(usage: u8) -> Option<&'static str> {
-    KEYS.iter().find(|&&(_, v)| v == usage).map(|(n, _)| n.as_str())
+/// Anzeigename einer HID-Usage in der aktuellen Sprache.
+pub fn key_name(usage: u8) -> Option<String> {
+    KEYS.iter()
+        .find(|&&(_, v)| v == usage)
+        .map(|(n, _)| n.clone())
+        .or_else(|| NAMED_KEYS.iter().find(|&&(_, v)| v == usage).map(|(id, _)| i18n::name(&format!("key.{id}"))))
 }
 
 fn k(name: &str) -> u8 {
@@ -94,15 +115,26 @@ fn k(name: &str) -> u8 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     pub index: usize,
-    /// Name auf der Kommandozeile
+    /// feste Kennung = deutscher Name in ASCII wie im Prototyp (z. B. "rueckgaengig")
     pub key: &'static str,
-    pub label: &'static str,
     pub size: usize,
     /// leer = Inhalt unbekannt, nicht zuweisbar
     pub record: Vec<u8>,
     /// Datensatz im Mitschnitt des Originals gesehen oder am Geraet getestet (2026-10-11)
     pub confirmed: bool,
     pub address: u16,
+}
+
+impl Function {
+    /// Name auf der Kommandozeile in der aktuellen Sprache.
+    pub fn name(&self) -> String {
+        i18n::name(&format!("function.{}.name", self.key))
+    }
+
+    /// Beschreibung in der aktuellen Sprache.
+    pub fn label(&self) -> String {
+        i18n::text(&format!("function.{}.label", self.key))
+    }
 }
 
 /// 04 + alle druecken, in umgekehrter Reihenfolge loslassen + 00 (Muster von Strg+C / Strg+V / Win+D).
@@ -155,59 +187,60 @@ fn h(text: &str) -> Vec<u8> {
     text.split_whitespace().map(|b| u8::from_str_radix(b, 16).expect("Hex")).collect()
 }
 
-/// (key, label, ListMemSize, record, confirmed) in der Reihenfolge von Mappingdefault.ini
-fn table() -> Vec<(&'static str, &'static str, usize, Vec<u8>, bool)> {
-    let (s, c, w, alt) = (k("strg"), k("shift"), k("win"), k("alt"));
+/// (Kennung, ListMemSize, record, confirmed) in der Reihenfolge von Mappingdefault.ini. Kennung = deutscher Name
+/// des Prototyps in ASCII; Name und Text je Sprache in locales/ unter `function.<Kennung>.name`/`.label`.
+fn table() -> Vec<(&'static str, usize, Vec<u8>, bool)> {
+    let (s, c, w, alt) = (k("ctrl"), k("shift"), k("win"), k("alt"));
     vec![
-        ("linksklick", "Linksklick", 6, hold_mouse(0x01), true),
-        ("rechtsklick", "Rechtsklick", 6, hold_mouse(0x02), true),
-        ("mittelklick", "Mittelklick", 6, h("06 24 89 ff ff 00"), true),
-        ("browser-vor", "Browser vor", 6, hold_mouse(0x10), true),
-        ("browser-zurueck", "Browser zurueck", 6, hold_mouse(0x08), true),
+        ("linksklick", 6, hold_mouse(0x01), true),
+        ("rechtsklick", 6, hold_mouse(0x02), true),
+        ("mittelklick", 6, h("06 24 89 ff ff 00"), true),
+        ("browser-vor", 6, hold_mouse(0x10), true),
+        ("browser-zurueck", 6, hold_mouse(0x08), true),
         // INI-Name "Perfect"; auf der 6980 sendet das Original AL Calculator (andere Maeuse: Sensorbefehl C1 00)
-        ("rechner", "Rechner (Consumer 0x0192)", 8, h("04 85 92 01 85 00 00 00"), true),
-        ("scroll-links", "Bildlauf links (= Standard von Kipprad links)", 0, vec![], true),
-        ("scroll-rechts", "Bildlauf rechts (= Standard von Kipprad rechts)", 0, vec![], true),
-        ("scroll-vor", "Bildlauf hoch", 3, vec![MODE_ONCE, EV_WHEEL_UP, EV_END], true),
-        ("scroll-zurueck", "Bildlauf runter", 3, vec![MODE_ONCE, EV_WHEEL_DOWN, EV_END], true),
-        ("doppelklick", "Doppelklick", 6, h("04 21 41 21 41 00"), true),
-        ("entf", "Entfernen", 6, h("04 83 4c 84 4c 00"), true),
-        ("rueckgaengig", "Rueckgaengig (Strg+Z)", 10, combo(&[s, k("z")]), true),
-        ("ausschneiden", "Ausschneiden (Strg+X)", 10, combo(&[s, k("x")]), true),
-        ("kopieren", "Kopieren (Strg+C)", 10, h("04 83 e0 83 06 84 06 84 e0 00"), true),
-        ("einfuegen", "Einfuegen (Strg+V)", 10, h("04 83 e0 83 19 84 19 84 e0 00"), true),
-        ("neu", "Neu (Strg+N)", 10, combo(&[s, k("n")]), true),
-        ("schliessen", "Schliessen (Strg+W)", 10, combo(&[s, k("w")]), true),
-        ("oeffnen", "Oeffnen (Strg+O)", 10, combo(&[s, k("o")]), true),
-        ("minimieren", "Minimieren", 14, window_menu(k("n")), true),
-        ("maximieren", "Maximieren", 14, window_menu(k("x")), true),
-        ("zoom-rein", "Zoom (Original: rein, sendet Strg+Rad runter)", 11, h("04 83 e0 88 0a 7f 88 0a 84 e0 00"), true),
-        ("zoom-raus", "Zoom (Original: raus, sendet Strg+Rad hoch)", 11, h("04 83 e0 88 0a 61 88 0a 84 e0 00"), true),
-        ("programm-schliessen", "Programm schliessen (Alt+F4)", 10, combo(&[alt, k("f4")]), true),
-        ("lauter", "Lauter", 8, consumer(0x00E9), true),
-        ("leiser", "Leiser", 8, consumer(0x00EA), true),
-        ("stumm", "Stumm", 8, consumer(0x00E2), true),
-        ("shift", "Shift", 6, hold_key(c), true),
-        ("strg", "Strg", 6, h("06 83 e0 ff ff 00"), true),
-        ("alt", "Alt", 6, hold_key(alt), true),
-        ("enter", "Enter", 6, hold_key(k("enter")), true),
-        ("lupe", "Lupe (Win+U)", 10, h("04 83 e3 83 18 84 18 84 e3 00"), true),
-        ("desktop", "Desktop (Win+D)", 10, combo(&[w, k("d")]), true),
-        ("internet", "Internet / Browser", 8, consumer(0x0196), true),
-        ("favoriten", "Browser-Favoriten", 8, consumer(0x022A), true),
-        ("vorheriges-fenster", "Vorheriges Fenster (Alt+Tab)", 10, combo(&[alt, k("tab")]), true),
-        ("email", "E-Mail", 8, consumer(0x018A), true),
-        ("play-pause", "Play/Pause", 8, consumer(0x00CD), true),
-        ("zurueck", "Vorheriger Titel", 8, consumer(0x00B6), true),
-        ("weiter", "Naechster Titel", 8, consumer(0x00B5), true),
-        ("speed-2x", "2x Tempo (solange gehalten)", 2, h("c8 00"), true),
-        ("speed-4x", "4x Tempo (solange gehalten)", 2, h("ca 00"), true),
-        ("speed-8x", "8x Tempo (solange gehalten)", 2, h("ce 00"), true),
+        ("rechner", 8, h("04 85 92 01 85 00 00 00"), true),
+        ("scroll-links", 0, vec![], true),
+        ("scroll-rechts", 0, vec![], true),
+        ("scroll-vor", 3, vec![MODE_ONCE, EV_WHEEL_UP, EV_END], true),
+        ("scroll-zurueck", 3, vec![MODE_ONCE, EV_WHEEL_DOWN, EV_END], true),
+        ("doppelklick", 6, h("04 21 41 21 41 00"), true),
+        ("entf", 6, h("04 83 4c 84 4c 00"), true),
+        ("rueckgaengig", 10, combo(&[s, k("z")]), true),
+        ("ausschneiden", 10, combo(&[s, k("x")]), true),
+        ("kopieren", 10, h("04 83 e0 83 06 84 06 84 e0 00"), true),
+        ("einfuegen", 10, h("04 83 e0 83 19 84 19 84 e0 00"), true),
+        ("neu", 10, combo(&[s, k("n")]), true),
+        ("schliessen", 10, combo(&[s, k("w")]), true),
+        ("oeffnen", 10, combo(&[s, k("o")]), true),
+        ("minimieren", 14, window_menu(k("n")), true),
+        ("maximieren", 14, window_menu(k("x")), true),
+        ("zoom-rein", 11, h("04 83 e0 88 0a 7f 88 0a 84 e0 00"), true),
+        ("zoom-raus", 11, h("04 83 e0 88 0a 61 88 0a 84 e0 00"), true),
+        ("programm-schliessen", 10, combo(&[alt, k("f4")]), true),
+        ("lauter", 8, consumer(0x00E9), true),
+        ("leiser", 8, consumer(0x00EA), true),
+        ("stumm", 8, consumer(0x00E2), true),
+        ("shift", 6, hold_key(c), true),
+        ("strg", 6, h("06 83 e0 ff ff 00"), true),
+        ("alt", 6, hold_key(alt), true),
+        ("enter", 6, hold_key(k("enter")), true),
+        ("lupe", 10, h("04 83 e3 83 18 84 18 84 e3 00"), true),
+        ("desktop", 10, combo(&[w, k("d")]), true),
+        ("internet", 8, consumer(0x0196), true),
+        ("favoriten", 8, consumer(0x022A), true),
+        ("vorheriges-fenster", 10, combo(&[alt, k("tab")]), true),
+        ("email", 8, consumer(0x018A), true),
+        ("play-pause", 8, consumer(0x00CD), true),
+        ("zurueck", 8, consumer(0x00B6), true),
+        ("weiter", 8, consumer(0x00B5), true),
+        ("speed-2x", 2, h("c8 00"), true),
+        ("speed-4x", 2, h("ca 00"), true),
+        ("speed-8x", 2, h("ce 00"), true),
         // Datensaetze aus dem Code des Originals (0x423630), am Geraet getestet 2026-10-11 (Runde 6)
-        ("nur-senkrecht", "Nur senkrecht bewegen (solange gehalten)", 2, h("c6 00"), true),
-        ("nur-waagerecht", "Nur waagerecht bewegen (solange gehalten)", 2, h("c7 00"), true),
+        ("nur-senkrecht", 2, h("c6 00"), true),
+        ("nur-waagerecht", 2, h("c7 00"), true),
         // Strg+Alt+K = Hotkey von GHOSTOPEN.exe (Autostart des Originals), der Macro.exe oeffnet
-        ("gigabyte-ghost", "Gigabyte-GHOST-Software oeffnen (Strg+Alt+K)", 14, combo(&[s, alt, k("k")]), true),
+        ("gigabyte-ghost", 14, combo(&[s, alt, k("k")]), true),
     ]
 }
 
@@ -216,10 +249,10 @@ pub static FUNCTIONS: LazyLock<Vec<Function>> = LazyLock::new(|| {
     table()
         .into_iter()
         .enumerate()
-        .map(|(index, (key, label, size, record, confirmed))| {
+        .map(|(index, (key, size, record, confirmed))| {
             assert!(record.is_empty() || record.len() == size, "{key}");
             assert!(size > 0 || record.is_empty(), "{key}");
-            let f = Function { index, key, label, size, record, confirmed, address: addr };
+            let f = Function { index, key, size, record, confirmed, address: addr };
             addr += size as u16;
             f
         })
@@ -250,9 +283,14 @@ pub static WHEEL_CLICKS: LazyLock<Vec<(&'static str, u16, Vec<u8>)>> = LazyLock:
     .collect()
 });
 
+/// Funktion nach Kennung oder Kommandozeilennamen in irgendeiner Sprache (mit oder ohne Umlaute).
 pub fn by_key(key: &str) -> Option<&'static Function> {
-    let key = if key == "perfect" { "rechner" } else { key }; // alter CLI-Name
-    FUNCTIONS.iter().find(|f| f.key == key)
+    let folded = fold(key);
+    let folded = if folded == "perfect" { "rechner" } else { folded.as_str() }; // alter CLI-Name
+    FUNCTIONS
+        .iter()
+        .find(|f| f.key == folded)
+        .or_else(|| FUNCTIONS.iter().find(|f| i18n::matches(&format!("function.{}.name", f.key), key)))
 }
 
 pub fn by_address(addr: u16) -> Option<&'static Function> {
@@ -279,80 +317,78 @@ fn parse_int(text: &str) -> Option<i64> {
     text.trim().parse().ok()
 }
 
-/// 'drueck a, warte 100, los a, klick links, tippe strg+c' -> Ereignisbytes (ohne Modus/Ende).
+/// 'press a, wait 100, release a, click left, tap ctrl+c' -> Ereignisbytes (ohne Modus/Ende).
+/// Befehle, Tasten und Maustasten werden in jeder Sprache aus locales/ erkannt ('drück a, warte 100', auch 'drueck').
 pub fn encode_events(text: &str) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     for raw in text.replace('\n', ",").split(',') {
-        let lower = raw.trim().to_lowercase();
+        let lower = fold(raw.trim());
         let words: Vec<&str> = lower.split_whitespace().collect();
         let Some((&cmd, rest)) = words.split_first() else {
             continue;
         };
         let arg = rest.join(" ");
-        match cmd {
-            "drueck" | "los" | "tippe" => {
-                let keys = arg.split('+').map(key_or_err).collect::<Result<Vec<u8>>>()?;
-                if cmd != "los" {
-                    for &key in &keys {
-                        out.extend([EV_KEY_DOWN, key]);
-                    }
-                }
-                if cmd != "drueck" {
-                    for &key in keys.iter().rev() {
-                        out.extend([EV_KEY_UP, key]);
-                    }
+        let verb = |id: &str| is_named("macro", id, cmd);
+        let (press, release, tap) = (verb("press"), verb("release"), verb("tap"));
+        let (mouse_down, mouse_up, click) = (verb("mouse_down"), verb("mouse_up"), verb("click"));
+        if press || release || tap {
+            let keys = arg.split('+').map(key_or_err).collect::<Result<Vec<u8>>>()?;
+            if !release {
+                for &key in &keys {
+                    out.extend([EV_KEY_DOWN, key]);
                 }
             }
-            "warte" => {
-                let ms = parse_int(&arg).filter(|ms| (1..=0xFFFF).contains(ms));
-                let Some(ms) = ms else {
-                    return invalid("Wartezeit 1-65535 ms");
-                };
-                if ms <= 0xFF {
-                    out.extend([EV_WAIT8, ms as u8]);
-                } else {
-                    out.extend([EV_WAIT16, (ms & 0xFF) as u8, (ms >> 8) as u8]);
+            if !press {
+                for &key in keys.iter().rev() {
+                    out.extend([EV_KEY_UP, key]);
                 }
             }
-            "rad" => {
-                let parts: Vec<&str> = arg.split_whitespace().collect();
-                if parts.is_empty() || !matches!(parts[0], "hoch" | "runter") {
-                    return invalid("rad hoch|runter [1-15]");
-                }
-                let n = match parts.get(1) {
-                    Some(t) => parse_int(t).ok_or_else(|| crate::Error::Invalid("Rad-Schritte 1-15".into()))?,
-                    None => 1,
-                };
-                if !(1..=15).contains(&n) {
-                    return invalid("Rad-Schritte 1-15");
-                }
-                let ev = if parts[0] == "hoch" { EV_WHEEL_UP } else { EV_WHEEL_DOWN };
-                out.extend(std::iter::repeat_n(ev, n as usize)); // ein Ereignis pro Raste
+        } else if verb("wait") {
+            let ms = parse_int(&arg).filter(|ms| (1..=0xFFFF).contains(ms));
+            let Some(ms) = ms else {
+                return invalid(tr!("macro.wait_range"));
+            };
+            if ms <= 0xFF {
+                out.extend([EV_WAIT8, ms as u8]);
+            } else {
+                out.extend([EV_WAIT16, (ms & 0xFF) as u8, (ms >> 8) as u8]);
             }
-            "consumer" => {
-                let usage = if arg == "los" { Some(0) } else { parse_hex(&arg) };
-                let Some(usage) = usage.filter(|u| (0..=0xFFFF).contains(u)) else {
-                    return invalid("consumer 0x0000-0xFFFF oder 'consumer los'");
-                };
-                out.extend([EV_CONSUMER, (usage & 0xFF) as u8, (usage >> 8) as u8]);
+        } else if verb("wheel") {
+            let parts: Vec<&str> = arg.split_whitespace().collect();
+            let up = parts.first().is_some_and(|p| is_named("macro", "up", p));
+            if parts.is_empty() || !(up || is_named("macro", "down", parts[0])) {
+                return invalid(tr!("macro.wheel_syntax"));
             }
-            "maus-drueck" | "maus-los" | "klick" => {
-                let Some(&(_, m)) = MOUSE_BUTTONS.iter().find(|(n, _)| *n == arg) else {
-                    let names: Vec<&str> = MOUSE_BUTTONS.iter().map(|(n, _)| *n).collect();
-                    return invalid(format!("Maustaste: {}", names.join(", ")));
-                };
-                if cmd != "maus-los" {
-                    out.push(EV_MOUSE_DOWN | m);
-                }
-                if cmd != "maus-drueck" {
-                    out.push(EV_MOUSE_UP | m);
-                }
+            let steps_err = || crate::Error::Invalid(tr!("macro.wheel_steps"));
+            let n = match parts.get(1) {
+                Some(text) => parse_int(text).ok_or_else(steps_err)?,
+                None => 1,
+            };
+            if !(1..=15).contains(&n) {
+                return Err(steps_err());
             }
-            _ => {
-                return invalid(format!(
-                    "unbekannter Befehl '{cmd}' (drueck, los, tippe, warte, maus-drueck, maus-los, klick, rad, consumer)"
-                ));
+            let ev = if up { EV_WHEEL_UP } else { EV_WHEEL_DOWN };
+            out.extend(std::iter::repeat_n(ev, n as usize)); // ein Ereignis pro Raste
+        } else if verb("consumer") {
+            let usage = if is_named("macro", "release", &arg) { Some(0) } else { parse_hex(&arg) };
+            let Some(usage) = usage.filter(|u| (0..=0xFFFF).contains(u)) else {
+                return invalid(tr!("macro.consumer_range"));
+            };
+            out.extend([EV_CONSUMER, (usage & 0xFF) as u8, (usage >> 8) as u8]);
+        } else if mouse_down || mouse_up || click {
+            let Some(&(_, m)) = MOUSE_BUTTONS.iter().find(|(id, _)| is_named("mouse", id, &arg)) else {
+                let names: Vec<String> =
+                    MOUSE_BUTTONS.iter().map(|(id, _)| i18n::name(&format!("mouse.{id}"))).collect();
+                return invalid(tr!("macro.mouse_button", names = names.join(", ")));
+            };
+            if !mouse_up {
+                out.push(EV_MOUSE_DOWN | m);
             }
+            if !mouse_down {
+                out.push(EV_MOUSE_UP | m);
+            }
+        } else {
+            return invalid(tr!("macro.unknown_command", cmd = cmd));
         }
     }
     Ok(out)
@@ -371,7 +407,7 @@ fn parse_hex(text: &str) -> Option<i64> {
 }
 
 fn key_or_err(name: &str) -> Result<u8> {
-    key(name).map_or_else(|| invalid(format!("unbekannte Taste '{name}'")), Ok)
+    key(name).map_or_else(|| invalid(tr!("macro.unknown_key", name = name)), Ok)
 }
 
 fn event_size(b: u8) -> usize {
@@ -395,11 +431,15 @@ pub fn record_length(data: &[u8]) -> usize {
     (i + 1).min(data.len())
 }
 
+/// Modusname in der aktuellen Sprache.
 pub fn mode_name(mode: u8) -> String {
-    MODE_NAMES.iter().find(|&&(_, v)| v == mode).map_or_else(|| format!("0x{mode:02X}"), |(n, _)| n.to_string())
+    MODES
+        .iter()
+        .find(|&&(_, v)| v == mode)
+        .map_or_else(|| format!("0x{mode:02X}"), |(id, _)| i18n::name(&format!("mode.{id}")))
 }
 
-/// (Modusname, [Ereignistexte]) fuer einen Funktionsdatensatz oder ein Makro; stoppt bei 00.
+/// (Modusname, [Ereignistexte]) in der aktuellen Sprache fuer einen Funktionsdatensatz oder ein Makro; stoppt bei 00.
 /// Geloeschte oder genullte Slots ergeben (None, []).
 pub fn decode_record(data: &[u8]) -> (Option<String>, Vec<String>) {
     if data.is_empty() || matches!(data[0], 0x00 | 0xFF) {
@@ -411,24 +451,33 @@ pub fn decode_record(data: &[u8]) -> (Option<String>, Vec<String>) {
         let b = data[i];
         if matches!(b, EV_KEY_DOWN | EV_KEY_UP) && i + 1 < data.len() {
             let usage = data[i + 1];
-            let name = key_name(usage).map_or_else(|| format!("0x{usage:02X}"), str::to_string);
-            events.push(format!("{} {name}", if b == EV_KEY_DOWN { "drueck" } else { "los" }));
+            let name = key_name(usage).unwrap_or_else(|| format!("0x{usage:02X}"));
+            let verb = if b == EV_KEY_DOWN { i18n::name("macro.press") } else { i18n::name("macro.release") };
+            events.push(format!("{verb} {name}"));
             i += 2;
         } else if b == EV_CONSUMER && i + 2 < data.len() {
             let u = u16::from(data[i + 1]) | u16::from(data[i + 2]) << 8;
-            events.push(if u != 0 { format!("consumer 0x{u:04X}") } else { "consumer los".into() });
+            events.push(if u != 0 {
+                format!("{} 0x{u:04X}", i18n::name("macro.consumer"))
+            } else {
+                i18n::name("macro.consumer_release")
+            });
             i += 3;
         } else if b == EV_WAIT8 && i + 1 < data.len() {
-            events.push(format!("warte {}", data[i + 1]));
+            events.push(format!("{} {}", i18n::name("macro.wait"), data[i + 1]));
             i += 2;
         } else if b == EV_WAIT16 && i + 2 < data.len() {
-            events.push(format!("warte {}", u16::from(data[i + 1]) | u16::from(data[i + 2]) << 8));
+            events.push(format!(
+                "{} {}",
+                i18n::name("macro.wait"),
+                u16::from(data[i + 1]) | u16::from(data[i + 2]) << 8
+            ));
             i += 3;
         } else if b & 0xE0 == EV_WHEEL && b & 0x1F != 0 {
             let raw = i32::from(b & 0x1F);
             let mut d = if raw & 0x10 != 0 { raw - 32 } else { raw };
-            let direction = if d > 0 { "hoch" } else { "runter" };
-            let prefix = format!("rad {direction} ");
+            let direction = if d > 0 { i18n::name("macro.up") } else { i18n::name("macro.down") };
+            let prefix = format!("{} {direction} ", i18n::name("macro.wheel"));
             // mehrere Rasten hintereinander -> eine Zeile
             if let Some(last) = events.pop_if(|e| e.starts_with(&prefix)) {
                 let prev: i32 = last.rsplit(' ').next().and_then(|n| n.parse().ok()).unwrap_or(0);
@@ -437,12 +486,16 @@ pub fn decode_record(data: &[u8]) -> (Option<String>, Vec<String>) {
             events.push(format!("{prefix}{}", d.abs()));
             i += 1;
         } else if matches!(b & 0xE0, EV_MOUSE_DOWN | EV_MOUSE_UP) && b & 0x1F != 0 {
-            let mut names: Vec<String> =
-                MOUSE_BUTTONS.iter().filter(|&&(_, m)| b & m != 0).map(|(n, _)| n.to_string()).collect();
+            let mut names: Vec<String> = MOUSE_BUTTONS
+                .iter()
+                .filter(|&&(_, m)| b & m != 0)
+                .map(|(id, _)| i18n::name(&format!("mouse.{id}")))
+                .collect();
             if names.is_empty() {
                 names.push(format!("0x{:02X}", b & 0x1F));
             }
-            let verb = if b & 0xE0 == EV_MOUSE_DOWN { "maus-drueck" } else { "maus-los" };
+            let verb =
+                if b & 0xE0 == EV_MOUSE_DOWN { i18n::name("macro.mouse_down") } else { i18n::name("macro.mouse_up") };
             events.push(format!("{verb} {}", names.join("+")));
             i += 1;
         } else {
@@ -481,7 +534,7 @@ mod tests {
     #[test]
     fn derived_patterns_reproduce_known_records() {
         assert_eq!(combo(&[k("win"), k("d")]), h("04 83 e3 83 07 84 07 84 e3 00"));
-        assert_eq!(combo(&[k("strg"), k("v")]), by_key("einfuegen").unwrap().record);
+        assert_eq!(combo(&[k("strg"), k("v")]), by_key("einfuegen").unwrap().record); // deutsche Namen gehen auch
         assert_eq!(consumer(0x00EA), h("04 85 ea 00 85 00 00 00"));
         assert_eq!(hold_key(k("strg")), by_key("strg").unwrap().record);
         assert_eq!(hold_mouse(0x04), by_key("mittelklick").unwrap().record);
@@ -493,7 +546,7 @@ mod tests {
         assert_eq!(key("y"), Some(0x1D));
         assert_eq!(key("0"), Some(0x27));
         assert_eq!(key("1"), Some(0x1E));
-        assert_eq!(key_name(0x2C), Some("space"));
+        assert_eq!(key_name(0x2C).as_deref(), Some("space"));
         assert_eq!(by_key("rueckgaengig").unwrap().record, h("04 83 e0 83 1c 84 1c 84 e0 00"));
     }
 
@@ -514,17 +567,28 @@ mod tests {
     }
 
     #[test]
+    fn english_and_ascii_commands_encode_like_german() {
+        let de = "drück shift, tippe strg+c, warte 300, los shift, klick links, maus-drück zurück, rad runter 2, consumer los";
+        let ascii = "drueck shift, tippe strg+c, warte 300, los shift, klick links, maus-drueck zurueck, rad runter 2, consumer los";
+        let en = "press shift, tap ctrl+c, wait 300, release shift, click left, mouse-down back, wheel down 2, consumer release";
+        assert_eq!(encode_events(en).unwrap(), encode_events(de).unwrap());
+        assert_eq!(encode_events(ascii).unwrap(), encode_events(de).unwrap());
+        assert_eq!(mode_value("loop"), Some(MODE_LOOP));
+        assert_eq!(key("pageup"), key("bildauf"));
+    }
+
+    #[test]
     fn decode_round_trip() {
         let (mode, events) = decode_record(&h("05 83 04 88 64 84 04 89 f4 01 21 41 00 ff"));
         assert_eq!(mode.as_deref(), Some("schleife"));
-        assert_eq!(events, s(&["drueck a", "warte 100", "los a", "warte 500", "maus-drueck links", "maus-los links"]));
+        assert_eq!(events, s(&["drück a", "warte 100", "los a", "warte 500", "maus-drück links", "maus-los links"]));
     }
 
     #[test]
     fn decode_klicker_macro_on_mouse() {
         assert_eq!(
             decode_record(&h("06 21 41 00")),
-            (Some("feuer".into()), s(&["maus-drueck links", "maus-los links"]))
+            (Some("feuer".into()), s(&["maus-drück links", "maus-los links"]))
         );
     }
 
@@ -549,6 +613,9 @@ mod tests {
         assert_eq!(by_key("gigabyte-ghost").unwrap().address, 0x1ECE);
         assert_eq!(by_key("gigabyte-ghost").unwrap().record, h("04 83 e0 83 e2 83 0e 84 0e 84 e2 84 e0 00"));
         assert_eq!(by_key("perfect").unwrap().key, "rechner");
+        assert_eq!(by_key("copy").unwrap().key, "kopieren"); // englische Namen gehen immer
+        assert_eq!(by_key("Rückgängig").unwrap().key, "rueckgaengig");
+        assert_eq!(by_key("schliessen").unwrap().name(), "schließen");
     }
 
     #[test]
@@ -572,7 +639,7 @@ mod tests {
 
     #[test]
     fn rejects_bad_input() {
-        for bad in ["drueck xyz", "warte 0", "warte 70000", "klick oben", "springe", "rad seitwaerts", "rad hoch 16"] {
+        for bad in ["drück xyz", "warte 0", "warte 70000", "klick oben", "springe", "rad seitwaerts", "rad hoch 16"] {
             assert!(encode_events(bad).is_err(), "{bad}");
         }
     }

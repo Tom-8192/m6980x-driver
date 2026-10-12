@@ -14,15 +14,23 @@ Unofficial reimplementation, not affiliated with Gigabyte. "GHOST" refers only t
 
 **Status 2.0 (Rust port of the Python prototype 1.1):** All features are ported: profile, LED (27 colours), DPI
 (separate X/Y, 90–6030), report rate, persistent save, button assignment (46 functions, macros, default), macros
-(editor, 3 modes, mouse wheel, consumer keys, pictures 1–100), backup (JSON), and the original software's `.meb` and
+(editor, 3 modes, mouse wheel, consumer keys, icons 1–100), backup (JSON), and the original software's `.meb` and
 macro `.ini` files. Every write is read back for verification. The packets sent are byte-identical to those of the
 prototype that was tested on the device (parity tests, see below). Writing, restoring and the new lock have been
 tested on the device under Windows.
 New compared to the prototype is a **cross-process lock**: the GUI and the command line can run at the same time.
 On Linux the tool builds and passes all tests but has not yet been tested with the mouse.
 
-The user interface, command output and the command-line argument names (e.g. `hinten`, `kopieren`, `makro:3`) are
-in German.
+**Languages:** English and German. The GUI has a language switch (top right, remembered); the command line takes
+`--lang en|de`. Without a choice, `M6980X_LANG` or the system language decides (German system → German, otherwise
+English). Input is understood in both languages, e.g. `button 1 back copy` and `button 1 hinten kopieren`, or the
+macro text `tap ctrl+c, wait 100` and `tippe strg+c, warte 100`. Key names follow the German QWERTZ layout (y and z
+are swapped compared to US).
+
+**Adding a language:** all texts (output, help, GUI, key/colour/function names) are in `locales/<code>.yml`, one file
+per language, embedded at build time. Copy `locales/en.yml` to e.g. `locales/fr.yml`, translate the values, rebuild —
+no code changes. Placeholders like `%{name}` must be kept; an entry `"space|leer"` means display name plus further
+accepted input. `cargo test` checks that every language file has all keys and the same placeholders.
 
 **Project status, guidelines and open tasks (German):** [`docs/UEBERGABE.md`](docs/UEBERGABE.md) · Protocol:
 [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
@@ -48,9 +56,10 @@ sudo udevadm control --reload && sudo udevadm trigger
 ```
 m6980x_configtool_gui            # or: m6980x_configtool gui
 m6980x_configtool_gui --fake     # dry run against a simulated mouse
+m6980x_configtool_gui --lang de  # start in German
 ```
 Five tabs: overview (profile, DPI stage, report rate, LED with colour preview, live display of the mouse buttons),
-DPI, buttons, macros (editor with picture and byte counter, `.ini` import/export) and backup (JSON, `.meb`, release
+DPI, buttons, macros (editor with icon and byte counter, `.ini` import/export) and backup (JSON, `.meb`, release
 all). All mouse access runs in the background; a log at the bottom records every command.
 
 ## Command line
@@ -67,22 +76,23 @@ m6980x_configtool watch                # watch profile/DPI stage live
 m6980x_configtool rate 500             # 1000/500/333/250/200/166/142/125 Hz
 m6980x_configtool buttons              # button assignment of all 3 profiles
 m6980x_configtool functions            # assignable functions
-m6980x_configtool button 1 hinten kopieren    # profile 1, rear side button = Ctrl+C
-m6980x_configtool button 1 vorne makro:3      # put macro 3 on the front side button
-m6980x_configtool button 1 vorne standard     # back to the button's built-in function
-m6980x_configtool macro 5 Test tippe strg+c, warte 100, klick links   # write macro 5
-m6980x_configtool macro 6 Auto klick links, warte 50 --mode feuer      # mode einmal/schleife/feuer (once/loop/fire)
-m6980x_configtool macro 8 Kopie tippe strg+c --bild 12                # with preview picture 12
-m6980x_configtool macro-bild 1 4                 # change only the picture (1-100 or keins = none)
+m6980x_configtool button 1 back copy          # profile 1, rear side button = Ctrl+C
+m6980x_configtool button 1 forward macro:3    # put macro 3 on the front side button
+m6980x_configtool button 1 forward default    # back to the button's built-in function
+m6980x_configtool macro 5 Test tap ctrl+c, wait 100, click left    # write macro 5
+m6980x_configtool macro 6 Auto click left, wait 50 --mode fire      # mode once/loop/fire
+m6980x_configtool macro 8 Copy tap ctrl+c --icon 12                 # with preview icon 12
+m6980x_configtool macro-icon 1 4                 # change only the icon (1-100 or none)
 m6980x_configtool macro-export 1 klicker.ini     # macro as a file of the original software
 m6980x_configtool macro-import 5 klicker.ini --name Klicker
+m6980x_configtool --lang de buttons              # output in German
 m6980x_configtool backup backup.json             # full backup (memory + all settings)
 m6980x_configtool restore backup.json            # write back (differences only) and save permanently
 m6980x_configtool rom-dump backup.meb            # 8 KB memory (.meb = format of the original, otherwise raw)
 m6980x_configtool rom-import old.meb             # import a backup of the original software
 m6980x_configtool macros                         # macro slots (or: --rom file.bin)
 ```
-Report rate, DPI and active profile are saved permanently (`01 02`) automatically. With `--temporaer` they only last
+Report rate, DPI and active profile are saved permanently (`01 02`) automatically. With `--temporary` they only last
 until the mouse is unplugged. `--device <path>` selects a specific device (hidapi path or `/dev/hidrawN`).
 Backups of the Python prototype can be read in both directions.
 
@@ -110,6 +120,7 @@ cargo test --workspace
 | `crates/m6980x-gui/` | GUI `m6980x_configtool_gui` |
 | `docs/PROTOCOL.md` | Protocol with levels of evidence (German) |
 | `assets/icon_descriptions.json` | Descriptions of the macro pictures (basis for own icons, no Gigabyte images) |
+| `locales/` | Translations, one YAML file per language |
 | `linux/` | udev rule |
 | `prototype/python/` | Python prototype 1.1 (reference, source of the parity fixtures) |
 

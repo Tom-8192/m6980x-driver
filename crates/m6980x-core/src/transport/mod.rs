@@ -10,7 +10,7 @@
 //! Jeder Befehl laeuft unter einer prozessuebergreifenden Sperre (`lock`/`unlock`), damit sich zwei
 //! Programme (z. B. Oberflaeche mit Live-Anzeige und Kommandozeile) nicht die Antworten wegnehmen.
 
-use crate::{Error, Result, hex};
+use crate::{Error, Result, hex, tr};
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -70,7 +70,12 @@ pub fn strip_report_id(buf: &[u8]) -> Result<[u8; REPORT_LEN]> {
 }
 
 pub(crate) fn not_found() -> Error {
-    Error::Transport(format!("Maus {VID:04X}:{PID:04X} (Interface {INTERFACE}) nicht gefunden"))
+    Error::Transport(tr!(
+        "transport.not_found",
+        vid = format!("{VID:04X}"),
+        pid = format!("{PID:04X}"),
+        interface = INTERFACE
+    ))
 }
 
 /// Oeffnet die Maus (oder den angegebenen Pfad).
@@ -86,7 +91,7 @@ pub fn open_transport(path: Option<&str>) -> Result<Box<dyn Transport>> {
     #[cfg(not(any(target_os = "linux", windows)))]
     {
         let _ = path;
-        Err(Error::Transport("dieses Betriebssystem wird nicht unterstuetzt".into()))
+        Err(Error::Transport(crate::i18n::tr!("transport.unsupported_os")))
     }
 }
 

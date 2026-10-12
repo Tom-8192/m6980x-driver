@@ -15,7 +15,7 @@ use crate::functions as fnc;
 use crate::protocol::{BUTTONS, DPI_STAGES, M6980X, PROFILES, ROM_SIZE};
 use crate::rom as romlayout;
 use crate::transport::Transport;
-use crate::{Error, Result, invalid};
+use crate::{Error, Result, invalid, tr};
 
 pub const FORMAT: &str = "m6980x-configtool-backup";
 /// vor der Umbenennung (2026-10-11) geschrieben
@@ -60,7 +60,7 @@ pub fn to_hex(data: &[u8]) -> String {
 pub fn from_hex(text: &str) -> Result<Vec<u8>> {
     let clean: Vec<u8> = text.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
     if !clean.len().is_multiple_of(2) {
-        return invalid("ungueltige Hex-Daten");
+        return invalid(tr!("backup.bad_hex"));
     }
     clean
         .chunks(2)
@@ -68,7 +68,7 @@ pub fn from_hex(text: &str) -> Result<Vec<u8>> {
             std::str::from_utf8(p)
                 .ok()
                 .and_then(|s| u8::from_str_radix(s, 16).ok())
-                .ok_or_else(|| Error::Invalid("ungueltige Hex-Daten".into()))
+                .ok_or_else(|| Error::Invalid(tr!("backup.bad_hex")))
         })
         .collect()
 }
@@ -113,23 +113,22 @@ pub fn save(data: &Backup, path: impl AsRef<Path>) -> Result<()> {
 }
 
 pub fn parse(text: &str) -> Result<Backup> {
-    let foreign = || Error::Invalid("keine Sicherung des M6980X Configuration Tool (Version 1)".into());
+    let foreign = || Error::Invalid(tr!("backup.foreign"));
     let value: serde_json::Value = serde_json::from_str(text).map_err(|e| Error::Invalid(e.to_string()))?;
     let format = value.get("format").and_then(|v| v.as_str()).unwrap_or("");
     if !(format == FORMAT || OLD_FORMATS.contains(&format)) || value.get("version").and_then(|v| v.as_u64()) != Some(1)
     {
         return Err(foreign());
     }
-    let data: Backup =
-        serde_json::from_value(value).map_err(|e| Error::Invalid(format!("Sicherung fehlerhaft: {e}")))?;
+    let data: Backup = serde_json::from_value(value).map_err(|e| Error::Invalid(tr!("backup.damaged", e = e)))?;
     if data.rom_bytes()?.len() != ROM_SIZE {
-        return invalid("ROM-Abbild hat nicht 8192 Bytes");
+        return invalid(tr!("backup.rom_image_not_8192"));
     }
     if data.buttons.len() != PROFILES
         || data.buttons.iter().any(|p| p.len() != BUTTONS)
         || data.led_colors.len() != PROFILES
     {
-        return invalid("Sicherung fehlerhaft: Tasten oder LED-Farben unvollstaendig");
+        return invalid(tr!("backup.damaged_incomplete"));
     }
     Ok(data)
 }
@@ -152,7 +151,7 @@ fn py_strip(s: &str) -> &str {
 /// Sicherungsdatei des Originals ("Backup all data to file"): INI-Abschnitt [Mem], count=8192,
 /// dann eine Zeile '<Adresse>=<Dezimalwert>' pro Byte. Enthaelt nur das 8-KB-ROM.
 pub fn read_meb(path: impl AsRef<Path>) -> Result<Vec<u8>> {
-    let bad = || Error::Invalid("keine gueltige .meb-Datei (8192 Bytes erwartet)".into());
+    let bad = || Error::Invalid(tr!("backup.bad_meb_file"));
     let mut values: HashMap<usize, i64> = HashMap::new();
     let mut count = None;
     for line in latin1_lines(path.as_ref())? {
@@ -193,7 +192,7 @@ pub fn write_meb(rom: &[u8], path: impl AsRef<Path>) -> Result<()> {
 /// gespeichert. Wie im Original wird ein leeres Makro (nur Modus + 00) nicht exportiert.
 pub fn write_macro_ini(record: &[u8], path: impl AsRef<Path>) -> Result<()> {
     if record.len() <= 2 {
-        return invalid("leeres Makro - das Original exportiert es nicht");
+        return invalid(tr!("backup.empty_macro"));
     }
     fs::write(path, ini_bytes("Macro", record))?;
     Ok(())
@@ -220,11 +219,11 @@ pub fn read_macro_ini(path: impl AsRef<Path>, max_size: usize) -> Result<Vec<u8>
     };
     let count = number("macro", "count");
     if !(2..=max_size as i64).contains(&count) {
-        return invalid(format!("keine gueltige Makrodatei (count={count}, erlaubt 2-{max_size})"));
+        return invalid(tr!("backup.bad_macro_file", count = count, max_size = max_size));
     }
     let data: Vec<u8> = (0..count).map(|i| (number("macro", &i.to_string()) & 0xFF) as u8).collect();
     if !matches!(data[0], 0x04..=0x06) {
-        return invalid(format!("unbekannter Makro-Modus 0x{:02X}", data[0]));
+        return invalid(tr!("backup.unknown_mode", mode = format!("{:02X}", data[0])));
     }
     if number("specialmacro", "index") != 0 {
         return Ok(vec![data[0], 0x00]);
@@ -248,7 +247,7 @@ pub fn load_rom_file(path: impl AsRef<Path>) -> Result<Vec<u8>> {
     }
     let data = fs::read(path)?;
     if data.len() != ROM_SIZE {
-        return invalid(format!("ROM-Datei muss {ROM_SIZE} Bytes haben"));
+        return invalid(tr!("backup.rom_file_size", rom_size = ROM_SIZE));
     }
     Ok(data)
 }
@@ -284,28 +283,28 @@ pub fn import_rom<T: Transport>(
     log: &mut dyn FnMut(&str),
 ) -> Result<Vec<(usize, usize)>> {
     if wanted.len() != ROM_SIZE {
-        return invalid(format!("ROM-Abbild muss {ROM_SIZE} Bytes haben"));
+        return invalid(tr!("backup.rom_image_size", rom_size = ROM_SIZE));
     }
     let current = g.read_rom(0, ROM_SIZE)?;
     for (s, e) in diff_runs(&current, wanted, 0, FIRMWARE_AREA) {
         g.write_rom(s as u16, &wanted[s..=e], false)?;
-        log(&format!("ROM 0x{s:04X}-0x{e:04X} geschrieben"));
+        log(&tr!("backup.rom_written", s = format!("{s:04X}"), e = format!("{e:04X}")));
     }
     for (s, e) in diff_runs(&current, wanted, TABLE_START, TABLE_END) {
         g.write_rom(s as u16, &wanted[s..=e], false)?;
-        log(&format!("Tastentabelle 0x{s:04X}-0x{e:04X} geschrieben"));
+        log(&tr!("backup.table_written", s = format!("{s:04X}"), e = format!("{e:04X}")));
     }
     for p in 0..PROFILES {
         for b in 0..BUTTONS {
             let target = romlayout::button_assignment(wanted, p, b);
             if let Some(t) = target.filter(|&t| usize::from(t) >= ROM_SIZE) {
-                log(&format!("Profil {}, Taste {b}: ungueltige Adresse 0x{t:04X} in der Datei - uebersprungen", p + 1));
+                log(&tr!("backup.button_bad_address", p = p + 1, b = b, address = format!("{t:04X}")));
                 continue;
             }
             if g.button(p as u8, b as u8)? != target {
                 set_or_reset(g, p as u8, b as u8, target)?;
-                let what = target.map_or_else(|| "Standard".to_string(), |t| format!("0x{t:04X}"));
-                log(&format!("Profil {}, Taste {b} -> {what}", p + 1));
+                let what = target.map_or_else(|| tr!("backup.default"), |a| format!("0x{a:04X}"));
+                log(&tr!("backup.button_set", p = p + 1, b = b, what = what));
             }
         }
     }
@@ -323,14 +322,14 @@ pub fn restore<T: Transport>(
     let current = g.read_rom(0, ROM_SIZE)?;
     for (s, e) in diff_runs(&current, &wanted, 0, FIRMWARE_AREA) {
         g.write_rom(s as u16, &wanted[s..=e], false)?;
-        log(&format!("ROM 0x{s:04X}-0x{e:04X} zurueckgeschrieben"));
+        log(&tr!("backup.rom_written_back", s = format!("{s:04X}"), e = format!("{e:04X}")));
     }
     for p in 0..PROFILES {
         for b in 0..BUTTONS {
             let target = data.buttons[p][b];
             if g.button(p as u8, b as u8)? != target {
                 set_or_reset(g, p as u8, b as u8, target)?;
-                log(&format!("Profil {}, Taste {b} wiederhergestellt", p + 1));
+                log(&tr!("backup.button_restored", p = p + 1, b = b));
             }
         }
     }
@@ -338,24 +337,24 @@ pub fn restore<T: Transport>(
     for (s, e) in diff_runs(&current, &wanted[TABLE_START..TABLE_END], 0, TABLE_END - TABLE_START) {
         let a = TABLE_START + s;
         g.write_rom(a as u16, &wanted[a..=TABLE_START + e], false)?;
-        log(&format!("Tastentabelle 0x{a:04X} zurueckgeschrieben"));
+        log(&tr!("backup.table_written_back", a = format!("{a:04X}")));
     }
     for (p, rgb) in data.led_colors.iter().enumerate() {
         if g.led_color(p as u8)? != *rgb {
             g.set_led_color(p as u8, *rgb)?;
-            log(&format!("LED Profil {} wiederhergestellt", p + 1));
+            log(&tr!("backup.led_profile_restored", p = p + 1));
         }
     }
     for (i, st) in data.dpi_stages.iter().enumerate() {
         let s = g.dpi_stage(i as u8)?;
         if (s.x_dpi(), s.y_dpi()) != (st.x_dpi, st.y_dpi) {
             g.set_dpi(i as u8, i64::from(st.x_dpi), Some(i64::from(st.y_dpi)))?;
-            log(&format!("DPI-Stufe {} wiederhergestellt", i + 1));
+            log(&tr!("backup.dpi_stage_restored", i = i + 1));
         }
     }
     if g.report_interval()? != data.report_interval_ms {
         g.set_report_interval(data.report_interval_ms)?;
-        log("Abtastrate wiederhergestellt");
+        log(&tr!("backup.report_rate_restored"));
     }
     if g.active_dpi_stage()? != data.active_dpi_stage {
         g.set_active_dpi_stage(data.active_dpi_stage)?;

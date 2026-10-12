@@ -1,46 +1,55 @@
 //! Namen und Anzeigetexte, die Kommandozeile und Oberflaeche teilen (im Prototyp in cli.py).
 
 use crate::functions as fnc;
+use crate::i18n::{self, fold};
 use crate::protocol::{BUTTONS, LED_LEVELS};
 use crate::rom as romlayout;
-use crate::{Result, invalid};
+use crate::{Result, invalid, tr};
 
-/// Kanalstufen: 0 = aus, 1 = halb, 2 = voll. Reihenfolge zaehlt: bei gleichen Werten gewinnt der erste Name.
-pub const LED_NAMES: [(&str, [u8; 3]); 15] = [
+/// Kanalstufen: 0 = aus, 1 = halb, 2 = voll. (Kennung, RGB); der Anzeigename steht in locales/ unter `led.<Kennung>`.
+/// Reihenfolge zaehlt: bei gleichen Werten gewinnt der erste Name.
+pub const LED_COLORS: [(&str, [u8; 3]); 15] = [
     // die 8 Farben der Farbauswahl im Original (Macro.exe 0x451000-0x45115e)
-    ("aus", [0, 0, 0]),
-    ("blau", [0, 0, 2]),
-    ("gruen", [0, 2, 0]),
-    ("hellblau", [0, 2, 2]),
-    ("hellgruen", [1, 1, 0]),
-    ("lila", [2, 0, 1]),
-    ("gelb", [2, 1, 0]),
-    ("rot", [2, 0, 0]),
+    ("off", [0, 0, 0]),
+    ("blue", [0, 0, 2]),
+    ("green", [0, 2, 0]),
+    ("light-blue", [0, 2, 2]),
+    ("light-green", [1, 1, 0]),
+    ("purple", [2, 0, 1]),
+    ("yellow", [2, 1, 0]),
+    ("red", [2, 0, 0]),
     // weitere Kombinationen, die die Maus annimmt
-    ("weiss", [2, 2, 2]),
+    ("white", [2, 2, 2]),
     ("magenta", [2, 0, 2]),
-    ("hellgelb", [2, 2, 0]),
-    ("violett", [1, 0, 2]),
-    ("himmelblau", [0, 1, 2]),
+    ("light-yellow", [2, 2, 0]),
+    ("violet", [1, 0, 2]),
+    ("sky-blue", [0, 1, 2]),
     ("cyan", [0, 2, 2]),
     ("orange", [2, 1, 0]),
 ];
 
-pub fn led_name(rgb: [u8; 3]) -> Option<&'static str> {
-    LED_NAMES.iter().find(|(_, v)| *v == rgb).map(|(n, _)| *n)
+/// (Name in der aktuellen Sprache, RGB) aller Farbvorlagen.
+pub fn led_names() -> Vec<(String, [u8; 3])> {
+    LED_COLORS.iter().map(|(id, rgb)| (i18n::name(&format!("led.{id}")), *rgb)).collect()
+}
+
+pub fn led_name(rgb: [u8; 3]) -> Option<String> {
+    LED_COLORS.iter().find(|(_, v)| *v == rgb).map(|(id, _)| i18n::name(&format!("led.{id}")))
 }
 
 pub fn format_led(rgb: [u8; 3]) -> String {
     let [r, g, b] = rgb;
     if rgb.iter().any(|c| !LED_LEVELS.contains(c)) {
-        return format!("R {r:3}  G {g:3}  B {b:3}   (ungueltig, erlaubt sind 0-2)");
+        return tr!("names.led_invalid", r = format!("{r:3}"), g = format!("{g:3}"), b = format!("{b:3}"));
     }
-    format!("R {r}  G {g}  B {b}   {}", led_name(rgb).unwrap_or(""))
+    format!("R {r}  G {g}  B {b}   {}", led_name(rgb).unwrap_or_default())
 }
 
 pub fn parse_led<S: AsRef<str>>(values: &[S]) -> Result<[u8; 3]> {
     if let [one] = values
-        && let Some((_, rgb)) = LED_NAMES.iter().find(|(n, _)| *n == one.as_ref().to_lowercase())
+        && let Some((_, rgb)) = LED_COLORS
+            .iter()
+            .find(|(id, _)| *id == fold(one.as_ref()) || i18n::matches(&format!("led.{id}"), one.as_ref()))
     {
         return Ok(*rgb);
     }
@@ -48,50 +57,52 @@ pub fn parse_led<S: AsRef<str>>(values: &[S]) -> Result<[u8; 3]> {
         let p = |i: usize| values[i].as_ref().parse::<u8>().expect("geprueft");
         return Ok([p(0), p(1), p(2)]);
     }
-    let names: Vec<&str> = LED_NAMES.iter().map(|(n, _)| *n).collect();
-    invalid(format!("Farbe als Name ({}) oder als drei Stufen R G B je 0-2 angeben", names.join(", ")))
+    let names: Vec<String> = led_names().into_iter().map(|(n, _)| n).collect();
+    invalid(tr!("names.colour_syntax", names = names.join(", ")))
 }
 
 /// Geraetetastennummern, an der Maus ermittelt (jede Taste hat ihre Nummer getippt); 5 hat keine Taste.
-pub const BUTTON_NAMES: [(u8, &str); 9] = [
-    (0, "links"),
-    (1, "rechts"),
-    (2, "mitte"),
-    (3, "hinten"),
-    (4, "vorne"),
-    (6, "kipp-links"),
-    (7, "kipp-rechts"),
-    (8, "rad-hoch"),
-    (9, "rad-runter"),
+/// (Nummer, Kennung); Anzeigename in locales/ unter `button.<Kennung>`.
+pub const BUTTON_IDS: [(u8, &str); 9] = [
+    (0, "left"),
+    (1, "right"),
+    (2, "middle"),
+    (3, "back"),
+    (4, "forward"),
+    (6, "tilt-left"),
+    (7, "tilt-right"),
+    (8, "wheel-up"),
+    (9, "wheel-down"),
 ];
 
-/// Eingebaute Funktion ("Standard") jeder Taste, aus den Input-Reports der Maus gemessen (2026-10-11).
-pub const STANDARD_ACTIONS: [&str; 10] = [
-    "Linksklick",
-    "Rechtsklick",
-    "Mittelklick",
-    "Zurueck, Maustaste 4",
-    "Vor, Maustaste 5",
-    "keine Taste",
-    "Bildlauf links",
-    "Bildlauf rechts",
-    "Bildlauf hoch",
-    "Bildlauf runter",
-];
-
-pub fn button_name(button: u8) -> Option<&'static str> {
-    BUTTON_NAMES.iter().find(|(b, _)| *b == button).map(|(_, n)| *n)
+/// (Nummer, Name in der aktuellen Sprache) aller belegbaren Tasten.
+pub fn button_names() -> Vec<(u8, String)> {
+    BUTTON_IDS.iter().map(|(b, id)| (*b, i18n::name(&format!("button.{id}")))).collect()
 }
 
+pub fn button_name(button: u8) -> Option<String> {
+    BUTTON_IDS.iter().find(|(b, _)| *b == button).map(|(_, id)| i18n::name(&format!("button.{id}")))
+}
+
+/// Eingebaute Funktion ("Standard") jeder Taste 0-9, aus den Input-Reports der Maus gemessen (2026-10-11);
+/// Texte in locales/ unter `button_action.<Nummer>`.
 pub fn standard_label(button: Option<u8>) -> String {
-    match button.and_then(|b| STANDARD_ACTIONS.get(usize::from(b))) {
-        Some(action) => format!("Standard ({action})"),
-        None => "Standard".into(),
+    match button.filter(|&b| usize::from(b) < BUTTONS) {
+        Some(b) => tr!("names.default_of", action = tr!(&format!("button_action.{b}"))),
+        None => tr!("names.default"),
     }
 }
 
+/// Zielwort fuer "zurueck auf die eingebaute Funktion" (Kommandozeile), in jeder Sprache.
+pub fn is_standard_word(text: &str) -> bool {
+    matches!(fold(text).as_str(), "standard" | "default") || i18n::matches("names.default", text)
+}
+
 pub fn parse_button(text: &str) -> Result<u8> {
-    if let Some((b, _)) = BUTTON_NAMES.iter().find(|(_, n)| *n == text) {
+    let folded = fold(text);
+    if let Some((b, _)) =
+        BUTTON_IDS.iter().find(|(_, id)| *id == folded || i18n::matches(&format!("button.{id}"), text))
+    {
         return Ok(*b);
     }
     if !text.is_empty()
@@ -101,8 +112,8 @@ pub fn parse_button(text: &str) -> Result<u8> {
     {
         return Ok(n);
     }
-    let names: Vec<&str> = BUTTON_NAMES.iter().map(|(_, n)| *n).collect();
-    invalid(format!("Taste als Nummer 0-{} oder Name ({})", BUTTONS - 1, names.join(", ")))
+    let names: Vec<String> = button_names().into_iter().map(|(_, n)| n).collect();
+    invalid(tr!("names.button_syntax", buttons = BUTTONS - 1, names = names.join(", ")))
 }
 
 /// Pythons `repr()` fuer kurze Namen: 'Klicker'.
@@ -136,13 +147,13 @@ pub fn describe_target(addr: Option<u16>, names: &[String], button: Option<u8>) 
     if let Some(slot) = romlayout::macro_slot_of(addr) {
         let name = names.get(slot).map(String::as_str).unwrap_or("");
         return if name.is_empty() {
-            format!("Makro {}", slot + 1)
+            tr!("names.macro", slot = slot + 1)
         } else {
-            format!("Makro {} {}", slot + 1, py_repr(name))
+            tr!("names.macro_named", slot = slot + 1, name = py_repr(name))
         };
     }
     match fnc::by_address(addr) {
-        Some(f) => f.label.to_string(),
+        Some(f) => f.label().to_string(),
         None => format!("ROM 0x{addr:04X}"),
     }
 }
@@ -162,18 +173,18 @@ pub fn interval_for_hz(hz: u32) -> Option<u8> {
 
 pub fn format_icon(icon: Option<u8>) -> String {
     match icon {
-        None => "kein Bild".into(),
-        Some(n) => format!("Bild {n} ({})", romlayout::icon_source(n)),
+        None => tr!("names.no_icon"),
+        Some(n) => tr!("names.icon", n = n, source = romlayout::icon_source(n)),
     }
 }
 
 pub fn parse_icon(text: &str) -> Result<Option<u8>> {
-    if matches!(text, "keins" | "kein") {
+    if fold(text) == "none" || i18n::matches("names.icon_none", text) {
         return Ok(None);
     }
     match text.parse::<u8>() {
         Ok(n) if text.chars().all(|c| c.is_ascii_digit()) && (1..=romlayout::ICON_COUNT).contains(&n) => Ok(Some(n)),
-        _ => invalid(format!("Bild als Nummer 1-{} oder 'keins'", romlayout::ICON_COUNT)),
+        _ => invalid(tr!("names.icon_syntax", icon_count = romlayout::ICON_COUNT)),
     }
 }
 
@@ -185,6 +196,8 @@ mod tests {
     fn parse_names_and_levels() {
         assert_eq!(parse_led(&["Rot"]).unwrap(), [2, 0, 0]);
         assert_eq!(parse_led(&["0", "1", "2"]).unwrap(), [0, 1, 2]);
+        assert_eq!(parse_led(&["Light-Blue"]).unwrap(), [0, 2, 2]); // englische Namen gehen immer
+        assert_eq!(parse_led(&["gruen"]).unwrap(), parse_led(&["Grün"]).unwrap()); // mit und ohne Umlaut
     }
 
     #[test]
@@ -197,12 +210,12 @@ mod tests {
 
     #[test]
     fn all_names_use_valid_levels() {
-        assert!(LED_NAMES.iter().all(|(_, rgb)| rgb.iter().all(|c| LED_LEVELS.contains(c))));
+        assert!(LED_COLORS.iter().all(|(_, rgb)| rgb.iter().all(|c| LED_LEVELS.contains(c))));
     }
 
     #[test]
     fn format_flags_invalid_values() {
-        assert!(format_led([255, 255, 0]).contains("ungueltig"));
+        assert!(format_led([255, 255, 0]).contains("ungültig"));
         assert!(format_led([2, 2, 0]).contains("gelb"));
         assert_eq!(format_led([2, 1, 0]), "R 2  G 1  B 0   gelb");
     }
@@ -212,6 +225,8 @@ mod tests {
         let hz: Vec<u32> = rates().iter().map(|r| r.0).collect();
         assert_eq!(hz, [1000, 500, 333, 250, 200, 166, 142, 125]);
         assert_eq!(parse_button("hinten").unwrap(), 3);
+        assert_eq!(parse_button("tilt-left").unwrap(), 6);
+        assert!(parse_icon("none").unwrap().is_none());
         assert_eq!(parse_button("9").unwrap(), 9);
         assert!(parse_button("10").is_err());
         assert_eq!(standard_label(Some(6)), "Standard (Bildlauf links)");

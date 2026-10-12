@@ -7,7 +7,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use super::{INTERFACE, LOCK_TIMEOUT_MS, PID, REPORT_LEN, Transport, VID, not_found, strip_report_id};
-use crate::{Error, Result};
+use crate::{Error, Result, tr};
 
 const fn ioc(direction: u64, kind: u8, nr: u64, size: u64) -> u64 {
     (direction << 30) | (size << 16) | ((kind as u64) << 8) | nr
@@ -55,7 +55,7 @@ impl HidrawTransport {
         };
         let file = OpenOptions::new().read(true).write(true).open(&path).map_err(|e| {
             if e.kind() == ErrorKind::PermissionDenied {
-                Error::Transport(format!("Kein Zugriff auf {path} - udev-Regel aus linux/ installieren"))
+                Error::Transport(tr!("transport.no_access", path = path))
             } else {
                 Error::Transport(format!("{path}: {e}"))
             }
@@ -100,10 +100,10 @@ impl Transport for HidrawTransport {
             }
             let err = std::io::Error::last_os_error();
             if err.kind() != ErrorKind::WouldBlock {
-                return Err(Error::Transport(format!("Sperre fehlgeschlagen: {err}")));
+                return Err(Error::Transport(tr!("transport.lock_failed", error = err)));
             }
             if Instant::now() >= end {
-                return Err(Error::Device("Maus wird gerade von einem anderen Programm benutzt".into()));
+                return Err(Error::Device(tr!("transport.busy_elsewhere")));
             }
             std::thread::sleep(Duration::from_millis(2));
         }

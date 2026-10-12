@@ -15,7 +15,7 @@ use std::time::Duration;
 use crate::functions::{self as fnc, Function};
 use crate::rom as romlayout;
 use crate::transport::{REPORT_LEN, Transport};
-use crate::{Error, Result, hex, invalid};
+use crate::{Error, Result, hex, invalid, tr};
 
 pub const STATUS_BUSY: u8 = 0x80;
 pub const STATUS_DONE: u8 = 0x40;
@@ -108,7 +108,7 @@ pub fn dpi_to_steps(dpi: i64, unit: u8) -> Result<u8> {
         if 2 * r > unit || (2 * r == unit && q % 2 == 1) { q + 1 } else { q }
     };
     if steps < 1 || steps * unit > i64::from(MAX_DPI) || steps > 0xFF {
-        return invalid(format!("DPI muss zwischen {unit} und {MAX_DPI} liegen"));
+        return invalid(tr!("error.dpi_range", unit = unit, max_dpi = MAX_DPI));
     }
     Ok(steps as u8)
 }
@@ -129,7 +129,7 @@ pub fn dpi_write_plan(x_steps: u8, y_steps: u8, supported: &[u8]) -> Result<Vec<
     let mut plan = Vec::new();
     for (axis, wanted) in [(0u8, x_steps), (1, y_steps)] {
         let Some(step) = snap_step(wanted, supported) else {
-            return device("Maus meldet keine DPI-Schritte");
+            return device(tr!("error.no_dpi_steps"));
         };
         let g = gcd(u32::from(wanted), u32::from(step));
         plan.push((axis, step, (u32::from(wanted) / g) as u8, (u32::from(step) / g) as u8));
@@ -153,7 +153,7 @@ impl<T: Transport> M6980X<T> {
     /// Ein Befehl mit Handshake. `trailer` landet in Byte 7, `delay` ist die Wartezeit nach dem Senden.
     pub fn xfer(&mut self, group: u8, cmd: u8, args: &[u8], trailer: Option<u8>, delay: Duration) -> Result<Reply> {
         if args.len() > 6 {
-            return invalid("max. 6 Argument-Bytes");
+            return invalid(tr!("error.too_many_args"));
         }
         let mut pkt = [0u8; REPORT_LEN];
         pkt[0] = group;
@@ -178,7 +178,7 @@ impl<T: Transport> M6980X<T> {
             self.pause(self.poll_interval);
         }
         if !ready {
-            return device("Maus meldet dauerhaft 'beschaeftigt'");
+            return device(tr!("error.always_busy"));
         }
 
         self.t.set_feature(pkt)?;
@@ -190,7 +190,7 @@ impl<T: Transport> M6980X<T> {
             }
             self.pause(self.poll_interval);
         }
-        device(format!("keine Antwort auf {}", hex(pkt)))
+        device(tr!("error.no_reply", packet = hex(pkt)))
     }
 
     fn pause(&self, d: Duration) {
@@ -207,7 +207,7 @@ impl<T: Transport> M6980X<T> {
 
     pub fn get_register(&mut self, reg: u8, args: &[u8]) -> Result<Reply> {
         if reg & 0x80 != 0 {
-            return invalid("Bit 0x80 waere ein Schreibbefehl");
+            return invalid(tr!("error.read_with_write_bit"));
         }
         self.xfer(GROUP_REGISTER, reg, args, None, Duration::ZERO)
     }
@@ -229,13 +229,14 @@ impl<T: Transport> M6980X<T> {
     pub fn check_model(&mut self) -> Result<Identify> {
         let ident = self.identify()?;
         if !ident.signature_ok {
-            return device(format!("Geraet antwortet nicht wie eine GHOST-Maus (Identifizieren: {})", ident.raw));
+            return device(tr!("error.not_a_ghost_mouse", raw = ident.raw));
         }
         if ident.model != Some(SUPPORTED_MODEL) {
-            return device(format!(
-                "Modell {} wird nicht unterstuetzt, nur {SUPPORTED_MODEL} (Identifizieren: {})",
-                ident.model.unwrap_or("unbekannt"),
-                ident.raw
+            return device(tr!(
+                "error.model_not_supported",
+                model = ident.model.map_or_else(|| tr!("common.unknown"), str::to_string),
+                supported_model = SUPPORTED_MODEL,
+                raw = ident.raw
             ));
         }
         Ok(ident)
@@ -255,12 +256,12 @@ impl<T: Transport> M6980X<T> {
     /// Aktives Hardware-Profil (0-2) umschalten und durch Zuruecklesen pruefen.
     pub fn set_active_profile(&mut self, profile: u8) -> Result<()> {
         if usize::from(profile) >= PROFILES {
-            return invalid(format!("Profil muss 0..{} sein", PROFILES - 1));
+            return invalid(tr!("error.profile_range", profiles = PROFILES - 1));
         }
         self.set_register(0x08, &[profile], Some(ROM_TRAILER))?;
         let actual = self.active_profile()?;
         if actual != profile {
-            return device(format!("Profilwechsel nicht uebernommen: Maus meldet Profil {actual}"));
+            return device(tr!("error.profile_not_applied", actual = actual));
         }
         Ok(())
     }
@@ -289,12 +290,12 @@ impl<T: Transport> M6980X<T> {
     /// Wie das Original (Mitschnitt: 500 -> 333 Hz = 01 8B 02 -> 01 8B 03).
     pub fn set_report_interval(&mut self, ms: u8) -> Result<()> {
         if !(1..=8).contains(&ms) {
-            return invalid("Abfrageintervall muss 1-8 ms sein");
+            return invalid(tr!("error.interval_range"));
         }
         self.set_register(0x0B, &[ms], None)?;
         let actual = self.report_interval()?;
         if actual != ms {
-            return device(format!("Abtastrate nicht uebernommen: Maus meldet {actual} ms"));
+            return device(tr!("error.rate_not_applied", actual = actual));
         }
         Ok(())
     }
@@ -308,15 +309,15 @@ impl<T: Transport> M6980X<T> {
     /// Wie das Original (0x445ba8) ohne Umschalten des aktiven Profils.
     pub fn set_led_color(&mut self, profile: u8, rgb: [u8; 3]) -> Result<()> {
         if usize::from(profile) >= PROFILES {
-            return invalid(format!("Profil muss 0..{} sein", PROFILES - 1));
+            return invalid(tr!("error.profile_range", profiles = PROFILES - 1));
         }
         if rgb.iter().any(|c| !LED_LEVELS.contains(c)) {
-            return invalid("LED-Stufen muessen 0 (aus), 1 (mittel) oder 2 (voll) sein");
+            return invalid(tr!("error.led_levels"));
         }
         self.set_register(0x06, &[profile, rgb[0], rgb[1], rgb[2]], None)?;
         let actual = self.led_color(profile)?;
         if actual != rgb {
-            return device(format!("LED-Farbe nicht uebernommen: Maus meldet {actual:?}"));
+            return device(tr!("error.led_not_applied", actual = format!("{actual:?}")));
         }
         Ok(())
     }
@@ -350,12 +351,12 @@ impl<T: Transport> M6980X<T> {
     /// die die DPI-Taste nie erreicht.
     pub fn set_active_dpi_stage(&mut self, stage: u8) -> Result<()> {
         if usize::from(stage) >= DPI_STAGES {
-            return invalid(format!("DPI-Stufe muss 0..{} sein", DPI_STAGES - 1));
+            return invalid(tr!("error.dpi_stage_range", dpi_stages = DPI_STAGES - 1));
         }
         self.set_register(0x07, &[stage], Some(ROM_TRAILER))?;
         let actual = self.active_dpi_stage()?;
         if actual != stage {
-            return device(format!("DPI-Stufe nicht uebernommen: Maus meldet {actual}"));
+            return device(tr!("error.dpi_stage_not_applied", actual = actual));
         }
         Ok(())
     }
@@ -363,7 +364,7 @@ impl<T: Transport> M6980X<T> {
     /// DPI einer Stufe setzen, gerundet auf die Geraete-Einheit (90). Liefert die zurueckgelesene Stufe.
     pub fn set_dpi(&mut self, stage: u8, x_dpi: i64, y_dpi: Option<i64>) -> Result<DpiStage> {
         if usize::from(stage) >= DPI_STAGES {
-            return invalid(format!("DPI-Stufe muss 0..{} sein", DPI_STAGES - 1));
+            return invalid(tr!("error.dpi_stage_range", dpi_stages = DPI_STAGES - 1));
         }
         let unit = self.dpi_stage(stage)?.unit;
         let x = dpi_to_steps(x_dpi, unit)?;
@@ -383,7 +384,7 @@ impl<T: Transport> M6980X<T> {
         let actual = self.dpi_stage(stage)?;
         let unit = u32::from(unit);
         if (actual.x_dpi(), actual.y_dpi()) != (u32::from(x) * unit, u32::from(y) * unit) {
-            return device(format!("DPI nicht uebernommen: Maus meldet {}/{}", actual.x_dpi(), actual.y_dpi()));
+            return device(tr!("error.dpi_not_applied", x_dpi = actual.x_dpi(), y_dpi = actual.y_dpi()));
         }
         Ok(actual)
     }
@@ -413,7 +414,7 @@ impl<T: Transport> M6980X<T> {
 
     fn check_button(profile: u8, button: u8) -> Result<()> {
         if usize::from(profile) >= PROFILES || usize::from(button) >= BUTTONS {
-            return invalid("Profil oder Taste ausserhalb des Bereichs");
+            return invalid(tr!("error.button_range"));
         }
         Ok(())
     }
@@ -423,7 +424,7 @@ impl<T: Transport> M6980X<T> {
     pub fn set_button(&mut self, profile: u8, button: u8, address: u16) -> Result<()> {
         Self::check_button(profile, button)?;
         if usize::from(address) >= ROM_SIZE {
-            return invalid("Adresse ausserhalb des ROM");
+            return invalid(tr!("error.address_outside_rom"));
         }
         let active = self.active_profile()?;
         let [lo, hi] = address.to_le_bytes();
@@ -431,7 +432,7 @@ impl<T: Transport> M6980X<T> {
         self.set_active_profile(active)?;
         let actual = self.button(profile, button)?;
         if actual != Some(address) {
-            return device(format!("Tastenbelegung nicht uebernommen: Maus meldet {actual:?}"));
+            return device(tr!("error.button_not_applied", actual = format!("{actual:?}")));
         }
         Ok(())
     }
@@ -476,7 +477,7 @@ impl<T: Transport> M6980X<T> {
     /// 03/05/06/07/08/09 mit je 6 Bytes, dann 02 04 <lo> <hi> 00 <Laenge> 00 12.
     pub fn write_rom_block(&mut self, addr: u16, data: &[u8]) -> Result<()> {
         if !(1..=32).contains(&data.len()) {
-            return invalid("Block 1-32 Bytes");
+            return invalid(tr!("error.block_size"));
         }
         for (cmd, chunk) in ROM_FILL_CMDS.iter().zip(data.chunks(6)) {
             self.xfer(GROUP_ROM, *cmd, chunk, None, Duration::from_millis(1))?;
@@ -503,7 +504,7 @@ impl<T: Transport> M6980X<T> {
     /// Schreiben und pruefen. Bloecke ueberschreiten nie eine 32-Byte-Grenze.
     pub fn write_rom(&mut self, addr: u16, data: &[u8], bytewise: bool) -> Result<()> {
         if usize::from(addr) + data.len() > ROM_SIZE {
-            return invalid("Schreibbereich ausserhalb des ROM");
+            return invalid(tr!("error.write_outside_rom"));
         }
         if bytewise {
             for (i, &b) in data.iter().enumerate() {
@@ -524,7 +525,7 @@ impl<T: Transport> M6980X<T> {
         }
         let actual = self.read_rom(addr, data.len())?;
         if actual != data {
-            return device(format!("ROM 0x{addr:04X} nicht korrekt geschrieben: {}", hex(&actual)));
+            return device(tr!("error.rom_not_written", addr = format!("{addr:04X}"), actual = hex(&actual)));
         }
         Ok(())
     }
@@ -538,7 +539,7 @@ impl<T: Transport> M6980X<T> {
         self.set_register(0x05, &[profile, button, 0x00, 0xFF, 0xFF], Some(ROM_TRAILER))?;
         self.set_active_profile(active)?;
         if let Some(actual) = self.button(profile, button)? {
-            return device(format!("Taste nicht auf Standard: Maus meldet 0x{actual:04X}"));
+            return device(tr!("error.button_not_reset", actual = format!("{actual:04X}")));
         }
         Ok(())
     }
@@ -547,13 +548,10 @@ impl<T: Transport> M6980X<T> {
     /// Maustasten-Funktionen auf den Radtasten bekommen den Klick-Datensatz des Originals (functions::placement).
     pub fn assign_function(&mut self, profile: u8, button: u8, function: &Function) -> Result<()> {
         if function.size == 0 {
-            return invalid(format!(
-                "'{}' hat keinen Datensatz - es ist die Grundfunktion des Kipprads (Taste dort auf 'standard' setzen)",
-                function.key
-            ));
+            return invalid(tr!("error.function_without_record", name = function.name()));
         }
         if function.record.is_empty() {
-            return invalid(format!("Inhalt von '{}' ist unbekannt - nicht zuweisbar", function.key));
+            return invalid(tr!("error.function_unknown_content", name = function.name()));
         }
         let (address, record) = fnc::placement(function, usize::from(button));
         self.write_rom(address, &record, false)?;
@@ -571,16 +569,13 @@ impl<T: Transport> M6980X<T> {
     pub fn write_macro(&mut self, slot: usize, record: &[u8], name: &str, icon: Option<u8>) -> Result<()> {
         Self::check_slot(slot)?;
         if !(2..=romlayout::MACRO_SLOT_SIZE).contains(&record.len()) || record.last() != Some(&0x00) {
-            return invalid(format!(
-                "Makro muss mit 00 enden und hoechstens {} Bytes lang sein",
-                romlayout::MACRO_SLOT_SIZE
-            ));
+            return invalid(tr!("error.macro_format", macro_slot_size = romlayout::MACRO_SLOT_SIZE));
         }
         let Some(raw_name) = name.chars().map(|c| u8::try_from(u32::from(c)).ok()).collect::<Option<Vec<u8>>>() else {
-            return invalid("Name nur mit Latin-1-Zeichen");
+            return invalid(tr!("error.name_latin1"));
         };
         if !(1..=romlayout::MACRO_NAME_LEN).contains(&raw_name.len()) {
-            return invalid(format!("Name 1-{} Zeichen", romlayout::MACRO_NAME_LEN));
+            return invalid(tr!("error.name_length", macro_name_len = romlayout::MACRO_NAME_LEN));
         }
         if let Some(icon) = icon {
             Self::check_icon(icon)?;
@@ -639,14 +634,14 @@ impl<T: Transport> M6980X<T> {
 
     fn check_slot(slot: usize) -> Result<()> {
         if slot >= romlayout::MACRO_SLOTS {
-            return invalid(format!("Makro-Slot muss 0..{} sein", romlayout::MACRO_SLOTS - 1));
+            return invalid(tr!("error.macro_slot_range", macro_slots = romlayout::MACRO_SLOTS - 1));
         }
         Ok(())
     }
 
     fn check_icon(icon: u8) -> Result<()> {
         if !(1..=romlayout::ICON_COUNT).contains(&icon) {
-            return invalid(format!("Bildnummer 1-{}", romlayout::ICON_COUNT));
+            return invalid(tr!("error.icon_range", icon_count = romlayout::ICON_COUNT));
         }
         Ok(())
     }

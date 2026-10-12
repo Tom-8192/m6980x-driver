@@ -9,6 +9,8 @@
 //!                  BUTTON_TABLE + Profil * 0x18 + Taste * 2 (bleiben nach "Standard" stehen)
 //! ```
 
+use crate::tr;
+
 pub const MACRO_SLOTS: usize = 20;
 pub const MACRO_SLOT_SIZE: usize = 0x170;
 pub const MACRO_INFO_BASE: u16 = 0x1CC1;
@@ -36,11 +38,7 @@ pub fn macro_icon(info: &[u8]) -> Option<u8> {
 
 /// Herkunft von Bild n: im Original eingebettet oder eigene Datei bmp\<n-40>.bmp im Programmordner des Originals.
 pub fn icon_source(n: u8) -> String {
-    if (1..=ICONS_EMBEDDED).contains(&n) {
-        "eingebaut".into()
-    } else {
-        format!("eigenes bmp\\{}.bmp", n - ICONS_EMBEDDED)
-    }
+    if (1..=ICONS_EMBEDDED).contains(&n) { tr!("icon.built_in") } else { tr!("icon.custom", n = n - ICONS_EMBEDDED) }
 }
 
 /// Datensatzadresse einer Taste in einem ROM-Abbild, None wenn das Flag "Standard" (00) sagt.

@@ -6,7 +6,7 @@ members = ["crates/m6980x-core", "crates/m6980x-cli", "crates/m6980x-gui"]
 version = "2.0.0"
 edition = "2024"
 authors = ["Tom"]
-description = "M6980X Configuration Tool: inoffizielles Konfigurationstool fuer die Gigabyte GHOST M6980X (Windows und Linux)"
+description = "M6980X Configuration Tool: unofficial configuration tool for the Gigabyte GHOST M6980X mouse (Windows and Linux)"
 repository = "https://github.com/Tom-8192/m6980x-driver"
 license = "GPL-2.0-or-later"
 

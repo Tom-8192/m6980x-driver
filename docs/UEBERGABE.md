@@ -37,6 +37,19 @@ Hersteller-OEM **Areson**): schlank, ohne Installation, **erst Windows, Linux im
   identisch mit vorher.
 - Sperre am Gerät geprüft: Oberfläche mit Live-Anzeige offen, parallel 3× `rom-dump` – alle bytegleich, kein Fehler.
 - Lizenz: GPL-2.0-or-later (passend zu OpenRGB).
+- **Mehrsprachig** (2026-10-12, Toms Wunsch: Englisch als Hauptsprache, dazu Deutsch mit echten Umlauten, weitere
+  Sprachen ohne Codeänderung): alle Texte in `locales/<code>.yml` (rust-i18n, beim Bauen eingebettet; `build.rs` im
+  Kern baut bei Änderungen neu). Code nutzt nur Schlüssel: `tr!("error.no_reply", packet = …)` aus
+  `crates/m6980x-core/src/i18n.rs` (prozessweite Sprache, `name()`/`matches()` für Namen, `fold()` für Eingaben ohne
+  Umlaute). Kennungen im Code: Funktionen = ASCII-Name des Prototyps (`rueckgaengig`), Tasten/Farben/Maustasten/Modi =
+  englisch (`ctrl`, `light-blue`); Namen je Sprache unter `function.*`, `key.*`, `led.*`, `button.*`, `mouse.*`,
+  `mode.*`. Eingaben werden in allen Sprachen erkannt. Hilfe der Kommandozeile unter `cli.*` (`help.rs`), Test prüft,
+  dass jeder Befehl/jedes Argument einen Text hat. Oberfläche: Sprachauswahl aus allen vorhandenen Dateien
+  (gespeichert per eframe-Persistenz). Ohne Wahl: `--lang`, `M6980X_LANG`, sonst Systemsprache, sonst Englisch.
+  Unit-Tests laufen deutsch (Paritätsvergleich schreibt Umlaute in ae/oe/ue um), `tests/english.rs` prüft Englisch,
+  `every_language_is_complete` alle Sprachdateien. Mit einer Test-`fr.yml` ausprobiert: geht ohne Codeänderung.
+  Tastaturlayout bleibt deutsch (y/z). Neue englische Optionen: `--temporary` (alt `--temporaer`), `--icon` (alt
+  `--bild`), `macro-icon` (alt `macro-bild`).
 - Oberfläche mit `--fake` durchgespielt (Reiter, Makros lesen/schreiben, Byte-Zähler, Fehlerdialog).
 - Linux: kompiliert (Cross-Check `x86_64-unknown-linux-gnu`), noch nicht an der Maus.
 
