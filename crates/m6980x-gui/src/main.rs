@@ -27,6 +27,7 @@ use worker::{Apply, Device, G};
 /// Modusbyte und Kennung; Beschriftung in locales/ unter `gui.mode.<Kennung>`
 const MODES: [(u8, &str); 3] = [(fnc::MODE_ONCE, "once"), (fnc::MODE_LOOP, "loop"), (fnc::MODE_HOLD, "fire")];
 const LANG_KEY: &str = "lang";
+const DPI_LINKED_KEY: &str = "dpi_linked";
 const LIVE_INTERVAL: Duration = Duration::from_millis(1500);
 const ICON_TEXTS: &str = include_str!("../../../assets/icon_descriptions.json");
 
@@ -111,6 +112,8 @@ pub struct App {
     leds: [[u8; 3]; PROFILES],
 
     dpi: [[i64; 2]; DPI_BUTTON_STAGES],
+    /// X and Y DPI are edited together (one value per stage)
+    dpi_linked: bool,
 
     btn_profile: u8,
     button_state: Vec<Vec<Option<u16>>>,
@@ -162,6 +165,7 @@ impl App {
             rate_ms: 2,
             leds: [[0; 3]; PROFILES],
             dpi: [[0; 2]; DPI_BUTTON_STAGES],
+            dpi_linked: cc.storage.and_then(|s| s.get_string(DPI_LINKED_KEY)).is_none_or(|v| v != "0"),
             btn_profile: 1,
             button_state: vec![vec![None; BUTTONS]; PROFILES],
             btn_choice: [0; BUTTONS],
@@ -274,6 +278,10 @@ impl App {
         }
         for (i, st) in s.dpi.iter().enumerate() {
             self.dpi[i] = [i64::from(st.x_dpi()), i64::from(st.y_dpi())];
+        }
+        // the mouse has different X/Y values: show them instead of hiding Y behind the link
+        if self.dpi.iter().any(|[x, y]| x != y) {
+            self.dpi_linked = false;
         }
         self.macro_names = s.names;
         self.button_state = s.buttons;
@@ -415,14 +423,27 @@ impl App {
     fn ui_dpi(&mut self, ui: &mut egui::Ui) {
         ui.label(tr!("gui.dpi_note", max_dpi = MAX_DPI));
         ui.add_space(6.0);
+        if ui.checkbox(&mut self.dpi_linked, tr!("gui.dpi_linked")).changed() && self.dpi_linked {
+            for [x, y] in &mut self.dpi {
+                *y = *x;
+            }
+        }
+        ui.add_space(4.0);
+        let linked = self.dpi_linked;
         egui::Grid::new("dpi").num_columns(4).spacing([10.0, 6.0]).show(ui, |ui| {
             for i in 0..DPI_BUTTON_STAGES {
                 ui.label(tr!("gui.stage_row", i = i + 1));
                 for (axis, label) in ["X", "Y"].iter().enumerate() {
                     ui.horizontal(|ui| {
                         ui.label(*label);
-                        ui.add(egui::DragValue::new(&mut self.dpi[i][axis]).range(90..=i64::from(MAX_DPI)).speed(10));
+                        let field =
+                            egui::DragValue::new(&mut self.dpi[i][axis]).range(90..=i64::from(MAX_DPI)).speed(10);
+                        // while linked, Y follows X and cannot be edited on its own
+                        ui.add_enabled(!(linked && axis == 1), field);
                     });
+                }
+                if linked {
+                    self.dpi[i][1] = self.dpi[i][0];
                 }
                 if ui.button(tr!("gui.set")).clicked() {
                     let [x, y] = self.dpi[i];
@@ -922,6 +943,7 @@ fn with_extension(path: PathBuf, ext: &str) -> PathBuf {
 impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string(LANG_KEY, i18n::lang());
+        storage.set_string(DPI_LINKED_KEY, if self.dpi_linked { "1" } else { "0" }.into());
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
