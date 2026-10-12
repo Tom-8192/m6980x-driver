@@ -1,0 +1,18 @@
+[package]
+name = "m6980x-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "m6980x_configtool_gui"
+path = "src/main.rs"
+
+[dependencies]
+eframe = "0.36.2"
+m6980x-core = { version = "2.0.0", path = "../m6980x-core", features = ["fake"] }
+rfd = "0.17.2"
+serde_json = "1.0.154"

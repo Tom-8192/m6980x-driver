@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = ["crates/m6980x-core", "crates/m6980x-cli", "crates/m6980x-gui"]
+
+[workspace.package]
+version = "2.0.0"
+edition = "2024"
+authors = ["Tom"]
+description = "M6980X Configuration Tool: inoffizielles Konfigurationstool fuer die Gigabyte GHOST M6980X (Windows und Linux)"
+repository = "https://github.com/Tom-8192/m6980x-driver"
+license = "GPL-2.0-or-later"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

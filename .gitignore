@@ -1,0 +1,13 @@
+/target/
+# Python-Prototyp
+__pycache__/
+*.egg-info/
+# Nie veroeffentlichen: Gigabyte-Bilder/-Programme/-Dateien, Mitschnitte (enthalten Tastatureingaben), Sicherungen der eigenen Maus
+assets/embedded_icons/
+assets/original_icons/
+original_software/
+captures/
+backups/
+Mappingdefault*.ini
+*.meb
+*.pcapng

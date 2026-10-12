@@ -1,0 +1,3 @@
+# M6980X Configuration Tool (Gigabyte GHOST M6980X): Zugriff auf /dev/hidraw* fuer den angemeldeten Benutzer
+# Installieren: sudo cp 70-m6980x-configtool.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="e0ff", ATTRS{idProduct}=="0001", MODE="0660", TAG+="uaccess"
