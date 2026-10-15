@@ -130,21 +130,13 @@ enum Cmd {
         rom: Option<PathBuf>,
     },
     Scroll {
-        #[arg(value_parser = parse_axis, requires = "value")]
-        axis: Option<Axis>,
         #[arg(value_parser = clap::value_parser!(u32).range(i64::from(pc::SCROLL_MIN)..=i64::from(pc::SCROLL_MAX)))]
-        value: Option<u32>,
+        lines: Option<u32>,
     },
     TiltMode {
         #[arg(value_parser = parse_tilt)]
         mode: TiltMode,
     },
-}
-
-#[derive(Clone, Copy)]
-enum Axis {
-    Vertical,
-    Horizontal,
 }
 
 #[derive(Subcommand)]
@@ -171,17 +163,6 @@ enum DpiCmd {
 
 fn parse_mode(text: &str) -> std::result::Result<u8, String> {
     fnc::mode_value(text).ok_or_else(|| tr!("cli.expected_one_of", names = fnc::mode_names().join(", ")))
-}
-
-fn parse_axis(text: &str) -> std::result::Result<Axis, String> {
-    match () {
-        _ if i18n::matches("scroll.vertical", text) => Ok(Axis::Vertical),
-        _ if i18n::matches("scroll.horizontal", text) => Ok(Axis::Horizontal),
-        _ => Err(tr!(
-            "cli.expected_one_of",
-            names = [i18n::name("scroll.vertical"), i18n::name("scroll.horizontal")].join(", ")
-        )),
-    }
 }
 
 fn parse_tilt(text: &str) -> std::result::Result<TiltMode, String> {
@@ -234,7 +215,7 @@ fn main() -> ExitCode {
             Ok(())
         }
         Cmd::Macros { rom: Some(path) } => backup::load_rom_file(path).map(|data| print_macros(&data)),
-        Cmd::Scroll { axis, value } => cmd_scroll(*axis, *value),
+        Cmd::Scroll { lines } => cmd_scroll(*lines),
         _ => with_device(&cli),
     };
     match result {
@@ -624,17 +605,14 @@ fn cmd_functions() {
     }
 }
 
-/// Windows scroll speed (PC setting, no mouse needed); like the scroll area on the original's DPI page.
-fn cmd_scroll(axis: Option<Axis>, value: Option<u32>) -> Result<()> {
-    match (axis, value) {
-        (Some(Axis::Vertical), Some(v)) => pc::set_scroll_lines(v)?,
-        (Some(Axis::Horizontal), Some(v)) => pc::set_scroll_chars(v)?,
-        _ => {}
+/// Windows vertical scroll speed (PC setting, no mouse needed); like the original's vertical slider.
+fn cmd_scroll(lines: Option<u32>) -> Result<()> {
+    if let Some(n) = lines {
+        pc::set_scroll_lines(n)?;
     }
     let lines = pc::scroll_lines()?;
     let lines = if lines == pc::PAGE_SCROLL { tr!("cli.scroll_page") } else { tr!("cli.scroll_lines", n = lines) };
-    println!("{:<24}{lines}", tr!("cli.scroll_vertical"));
-    println!("{:<24}{}", tr!("cli.scroll_horizontal"), tr!("cli.scroll_chars", n = pc::scroll_chars()?));
+    println!("{} {lines}", tr!("cli.scroll_vertical"));
     if pc::original_software().tilt {
         println!("{}", tr!("cli.tilt_running_note"));
     }

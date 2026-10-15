@@ -99,6 +99,9 @@ images**).
 - Fixed: five CLI messages showed `%{…}` placeholders (wrong argument names, e.g. `backup`); new test
   `crates/m6980x-core/tests/placeholders.rs` compares every `tr!` call with the language files.
 - GUI card only checked with `--fake` via screenshots (German/English); not clicked by hand.
+- Released as **2.3.0**. Afterwards Tom found that the horizontal slider (`SPI_SETWHEELSCROLLCHARS`) has no effect in
+  Excel and Firefox → removed again (vertical slider, `scroll <lines>`, tilt mode switch stay). Not released yet
+  (Tom: no build for now). Possible next step: own tilt helper replacing Tilt.exe (see PROTOCOL.md).
 
 ### Python prototype 1.1
 

@@ -483,15 +483,19 @@ Tom tilted and reported what scrolled; the script listened on interface 1 (vendo
   Tilt.exe running like Tom's autostart, mouse in tilt mode (as after every start of Tilt.exe).
 
 **In `m6980x_configtool` (since 2026-10-15, not released yet):**
-- `scroll [vertical|horizontal <1-100>]` and the "Scrolling" card on the performance page (Windows only):
-  vertical = `SPI_SETWHEELSCROLLLINES` exactly as the original; horizontal = `SPI_SETWHEELSCROLLCHARS`
-  (characters per AC Pan step in native mode; the original never touches it, Tilt.exe's speed only exists in its
-  tilt mode). Linux has no system-wide equivalent (desktop-specific, e.g. KDE `kdeglobals` `WheelScrollLines`).
+- `scroll [<1-100>]` and the "Scrolling" card on the performance page (Windows only): `SPI_SETWHEELSCROLLLINES`
+  exactly as the original's vertical slider. Linux has no system-wide equivalent (desktop-specific, e.g. KDE
+  `kdeglobals` `WheelScrollLines`).
+- **No horizontal speed.** 2.3.0 had a horizontal slider using `SPI_SETWHEELSCROLLCHARS` (characters per AC Pan
+  step in native mode). Tom's test: Excel and Firefox ignore it, also after a restart – removed again
+  (2026-10-15). The original's horizontal speed only works because Tilt.exe scrolls itself in tilt mode; an own
+  helper like that (tilt mode + `SendInput` with `MOUSEEVENTF_HWHEEL` × speed, Linux: uinput `REL_HWHEEL`) would be
+  the way to get it back. Not tested yet whether repeated hwheel events scroll faster in Excel/Firefox.
 - `tilt-mode native|driver` and the "Tilt wheel native" button: `M6980X::set_tilt_mode` (serial ×2, 120, 201/200
   on one handle opened like Tilt.exe). Windows only; on Linux not needed after a replug. There it would need USB
   control transfers `GET_DESCRIPTOR(string, …)` (libusb/rusb or usbdevfs), hidraw cannot send them.
 - Tilt.exe running → note (CLI `scroll`/`tilt-mode`, GUI scroll card): it puts the mouse in tilt mode at every start,
-  then the Windows horizontal setting has no effect. Macro.exe running → warning (CLI on stderr, GUI banner):
+  then Tilt.exe scrolls horizontally with its own speed. Macro.exe running → warning (CLI on stderr, GUI banner):
   it uses the same feature report channel without our lock.
 - Not done: an own tilt-mode driver like Tilt.exe (background program turning `01 12 03 03 ±1` into scrolling).
 

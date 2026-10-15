@@ -8,10 +8,10 @@ use crate::Result;
 #[cfg(not(windows))]
 use crate::{Error, tr};
 
-/// Range of both sliders. The original allows 1-100 lines; for characters it had no slider (Tilt.exe used 1-40).
+/// Range of the original's vertical slider.
 pub const SCROLL_MIN: u32 = 1;
 pub const SCROLL_MAX: u32 = 100;
-/// Windows default for lines per wheel notch and characters per tilt step.
+/// Windows default for lines per wheel notch.
 pub const WINDOWS_DEFAULT: u32 = 3;
 /// `WHEEL_PAGESCROLL`: "one screen per notch" instead of a number of lines.
 pub const PAGE_SCROLL: u32 = u32::MAX;
@@ -33,16 +33,8 @@ pub fn set_scroll_lines(lines: u32) -> Result<()> {
     imp::set(imp::SPI_SETWHEELSCROLLLINES, lines)
 }
 
-/// Characters per tilt step (`SPI_GETWHEELSCROLLCHARS`). The original never sets it; it is the Windows setting for
-/// horizontal scrolling in native tilt mode (Tilt.exe's own speed only works in its tilt mode).
-pub fn scroll_chars() -> Result<u32> {
-    imp::get(imp::SPI_GETWHEELSCROLLCHARS)
-}
-
-pub fn set_scroll_chars(chars: u32) -> Result<()> {
-    check_range(chars)?;
-    imp::set(imp::SPI_SETWHEELSCROLLCHARS, chars)
-}
+// No horizontal speed: the Windows setting for it (SPI_SETWHEELSCROLLCHARS) is ignored by Excel and Firefox (Tom,
+// 2026-10-15). The original's horizontal speed only exists in Tilt.exe's tilt mode, where Tilt.exe scrolls itself.
 
 fn check_range(value: u32) -> Result<()> {
     if (SCROLL_MIN..=SCROLL_MAX).contains(&value) {
@@ -56,7 +48,7 @@ fn check_range(value: u32) -> Result<()> {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct OriginalSoftware {
     /// `Tilt.exe`: switches the mouse into tilt mode when it starts (with its default setting) and then does the
-    /// horizontal scrolling itself; the Windows setting for characters per tilt step has no effect then.
+    /// horizontal scrolling itself, with its own speed.
     pub tilt: bool,
     /// `Macro.exe`: talks to the mouse over the same channel without our lock between programs.
     pub configurator: bool,
@@ -77,9 +69,7 @@ mod imp {
     use windows_sys::Win32::System::Threading::{
         OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
     };
-    pub use windows_sys::Win32::UI::WindowsAndMessaging::{
-        SPI_GETWHEELSCROLLCHARS, SPI_GETWHEELSCROLLLINES, SPI_SETWHEELSCROLLCHARS, SPI_SETWHEELSCROLLLINES,
-    };
+    pub use windows_sys::Win32::UI::WindowsAndMessaging::{SPI_GETWHEELSCROLLLINES, SPI_SETWHEELSCROLLLINES};
     use windows_sys::Win32::UI::WindowsAndMessaging::{SPIF_SENDCHANGE, SPIF_UPDATEINIFILE, SystemParametersInfoW};
 
     use super::OriginalSoftware;
@@ -165,8 +155,6 @@ mod imp {
 
     pub const SPI_GETWHEELSCROLLLINES: u32 = 0x68;
     pub const SPI_SETWHEELSCROLLLINES: u32 = 0x69;
-    pub const SPI_GETWHEELSCROLLCHARS: u32 = 0x6C;
-    pub const SPI_SETWHEELSCROLLCHARS: u32 = 0x6D;
 
     pub fn get(_action: u32) -> Result<u32> {
         Err(Error::Invalid(tr!("pc.windows_only")))

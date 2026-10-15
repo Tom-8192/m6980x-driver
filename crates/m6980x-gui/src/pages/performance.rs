@@ -35,30 +35,23 @@ impl App {
         }
     }
 
-    /// Like the scroll area on the original's DPI page, but with Windows settings instead of Tilt.exe.
+    /// Like the scroll area on the original's DPI page: the vertical speed as a Windows setting. The horizontal speed
+    /// only exists in Tilt.exe's tilt mode (the Windows setting for it is ignored by Excel and Firefox).
     fn scroll_card(&mut self, ui: &mut Ui) {
         card_title(ui, icon::MOUSE_SCROLL, &tr!("gui.scroll"), Some(&tr!("gui.scroll_note")));
-        let rows = [
-            (0, tr!("gui.scroll_vertical"), tr!("gui.scroll_lines_unit")),
-            (1, tr!("gui.scroll_horizontal"), tr!("gui.scroll_chars_unit")),
-        ];
-        for (axis, label, unit) in rows {
-            let mut commit = false;
-            ui.horizontal(|ui| {
-                ui.add_sized(egui::vec2(110.0, 20.0), egui::Label::new(RichText::new(label).strong()));
-                ui.spacing_mut().slider_width = (ui.available_width() - 160.0).clamp(140.0, 480.0);
-                let r = ui
-                    .add(egui::Slider::new(&mut self.scroll[axis], SCROLL_MIN..=SCROLL_MAX).suffix(format!(" {unit}")));
-                // write when the slider is released or a typed value is done, like the DPI sliders
-                if r.drag_stopped() || r.lost_focus() || (r.changed() && !r.dragged() && !r.has_focus()) {
-                    commit = true;
-                }
-            });
-            if commit {
-                self.commit_scroll(axis);
-            }
+        let mut commit = false;
+        ui.horizontal(|ui| {
+            ui.add_sized(egui::vec2(110.0, 20.0), egui::Label::new(RichText::new(tr!("gui.scroll_vertical")).strong()));
+            ui.spacing_mut().slider_width = (ui.available_width() - 160.0).clamp(140.0, 480.0);
+            let unit = tr!("gui.scroll_lines_unit");
+            let r = ui.add(egui::Slider::new(&mut self.scroll, SCROLL_MIN..=SCROLL_MAX).suffix(format!(" {unit}")));
+            // write when the slider is released or a typed value is done, like the DPI sliders
+            commit = r.drag_stopped() || r.lost_focus() || (r.changed() && !r.dragged() && !r.has_focus());
+        });
+        if commit {
+            self.commit_scroll();
         }
-        if self.scroll_pc[0] == PAGE_SCROLL {
+        if self.scroll_pc == PAGE_SCROLL {
             widgets::muted(ui, tr!("gui.scroll_page_note"));
         }
         ui.horizontal_wrapped(|ui| {

@@ -73,7 +73,7 @@ m6980x_configtool dpi set 1 1800 1200  # Stufe 1: X 1800, Y 1200 (90er-Schritte,
 m6980x_configtool dpi default          # Werkswerte 810/1620/3240 und 500 Hz
 m6980x_configtool watch                # Profil/DPI-Stufe live beobachten
 m6980x_configtool rate 500             # 1000/500/333/250/200/166/142/125 Hz
-m6980x_configtool scroll vertikal 3    # Windows: Zeilen pro Raste (horizontal = Zeichen pro Kippschritt)
+m6980x_configtool scroll 3             # Windows: Zeilen pro Raste (vertikale Bildlaufgeschwindigkeit)
 m6980x_configtool tilt-mode nativ      # Kipprad nach Tilt.exe der Original-Software wieder normal (Windows)
 m6980x_configtool buttons              # Tastenbelegung aller 3 Profile
 m6980x_configtool functions            # belegbare Funktionen

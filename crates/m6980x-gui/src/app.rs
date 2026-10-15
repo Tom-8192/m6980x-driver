@@ -142,10 +142,10 @@ pub struct App {
     /// success message of the last macro job and when it came
     pub flash: Option<(String, Instant)>,
 
-    /// Windows scroll speed [lines per notch, characters per tilt step] on the sliders
-    pub scroll: [u32; 2],
-    /// values last read from / written to Windows
-    pub scroll_pc: [u32; 2],
+    /// Windows lines per wheel notch on the slider
+    pub scroll: u32,
+    /// value last read from / written to Windows
+    pub scroll_pc: u32,
     /// programs of the original software, checked every few seconds
     pub original: OriginalSoftware,
     last_original_check: Instant,
@@ -183,9 +183,9 @@ fn stage_dpi(st: &DpiStage) -> [i64; 2] {
     [i64::from(st.x_dpi()), i64::from(st.y_dpi())]
 }
 
-/// Windows scroll speed [lines, characters]; the Windows default where it cannot be read (other systems).
-fn read_scroll() -> [u32; 2] {
-    [pc::scroll_lines().unwrap_or(WINDOWS_DEFAULT), pc::scroll_chars().unwrap_or(WINDOWS_DEFAULT)]
+/// Windows lines per wheel notch; the Windows default where it cannot be read (other systems).
+fn read_scroll() -> u32 {
+    pc::scroll_lines().unwrap_or(WINDOWS_DEFAULT)
 }
 
 impl App {
@@ -513,26 +513,17 @@ impl App {
         }
     }
 
-    /// Writes slider `axis` (0 = lines per notch, 1 = characters per tilt step) to Windows if it changed.
-    /// The dry run (`--fake`) leaves Windows alone.
-    pub fn commit_scroll(&mut self, axis: usize) {
-        let value = self.scroll[axis];
-        if value == self.scroll_pc[axis] {
+    /// Writes the lines per wheel notch to Windows if the slider changed. The dry run (`--fake`) leaves Windows alone.
+    pub fn commit_scroll(&mut self) {
+        let value = self.scroll;
+        if value == self.scroll_pc {
             return;
         }
-        let result = match (self.fake, axis) {
-            (true, _) => Ok(()),
-            (false, 0) => pc::set_scroll_lines(value),
-            (false, _) => pc::set_scroll_chars(value),
-        };
+        let result = if self.fake { Ok(()) } else { pc::set_scroll_lines(value) };
         match result {
             Ok(()) => {
-                self.scroll_pc[axis] = value;
-                self.log(if axis == 0 {
-                    tr!("gui.scroll_lines_set", n = value)
-                } else {
-                    tr!("gui.scroll_chars_set", n = value)
-                });
+                self.scroll_pc = value;
+                self.log(tr!("gui.scroll_lines_set", n = value));
             }
             Err(e) => {
                 self.error = Some((tr!("gui.error"), e.to_string()));
@@ -543,9 +534,8 @@ impl App {
     }
 
     pub fn scroll_windows_default(&mut self) {
-        self.scroll = [WINDOWS_DEFAULT; 2];
-        self.commit_scroll(0);
-        self.commit_scroll(1);
+        self.scroll = WINDOWS_DEFAULT;
+        self.commit_scroll();
     }
 
     /// Tilt wheel back to native mode (Tilt.exe of the original switches it to its own mode when it starts).
