@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use crate::Result;
+use crate::protocol::{TILT_DRIVER_STRING, TILT_NATIVE_STRING, TILT_UNLOCK_STRING};
 use crate::transport::{REPORT_LEN, Transport};
 
 const FILL_OFFSETS: [(u8, usize); 6] = [(0x03, 0), (0x05, 6), (0x06, 12), (0x07, 18), (0x08, 24), (0x09, 30)];
@@ -43,6 +44,10 @@ pub struct FakeMouse {
     pub buttons: HashMap<(u8, u8), (u8, u16)>,
     pub interval: u8,
     pub saved: bool,
+    /// requested string descriptors in order, `None` = serial number
+    pub strings: Vec<Option<u8>>,
+    /// tilt mode like the real mouse: 200/201 only count right after serial number ×2 and 120
+    pub tilt_driver: bool,
 }
 
 impl Default for FakeMouse {
@@ -65,6 +70,8 @@ impl Default for FakeMouse {
             buttons: HashMap::from([((0, 4), (0x80, 0x1D98))]),
             interval: 2,
             saved: false,
+            strings: Vec::new(),
+            tilt_driver: false,
         }
     }
 }
@@ -174,5 +181,30 @@ impl Transport for FakeMouse {
 
     fn path(&self) -> String {
         "simulated".into()
+    }
+
+    /// Answers of the real mouse: 120 = "G4…", 200 like string 0, others like string 1 ("A.....").
+    fn string_descriptor(&mut self, index: u8) -> Result<Vec<u8>> {
+        let unlocked = self.strings.ends_with(&[None, None, Some(TILT_UNLOCK_STRING)]);
+        self.strings.push(Some(index));
+        match index {
+            TILT_DRIVER_STRING if unlocked => self.tilt_driver = true,
+            TILT_NATIVE_STRING if unlocked => self.tilt_driver = false,
+            _ => {}
+        }
+        let answer: &[u8] = match index {
+            TILT_UNLOCK_STRING => &[0x47, 0x34, 0x2D, 0x09, 0x01, 0x5A, 0x05, 0x3F],
+            TILT_DRIVER_STRING => &[0x09, 0x04],
+            _ => &[0x41, 0, 0x2E, 0, 0x2E, 0, 0x2E, 0, 0x2E, 0, 0x2E, 0],
+        };
+        let mut buf = answer.to_vec();
+        buf.resize(0x200, 0);
+        Ok(buf)
+    }
+
+    /// The real mouse has no serial number: the request fails.
+    fn serial_number(&mut self) -> Result<Vec<u8>> {
+        self.strings.push(None);
+        Err(crate::Error::Transport("no serial number".into()))
     }
 }

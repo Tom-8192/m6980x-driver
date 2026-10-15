@@ -266,6 +266,7 @@ impl eframe::App for App {
         }
         self.finish_jobs();
         self.poll_live();
+        self.poll_original();
         // a running job with progress is redrawn often so the bar moves smoothly
         ctx.request_repaint_after(Duration::from_millis(if self.task.is_some() { 50 } else { 500 }));
 
@@ -308,6 +309,10 @@ impl eframe::App for App {
                 ui,
                 |ui| {
                     ui.set_max_width(ui.available_width().min(1000.0));
+                    if self.original.configurator {
+                        widgets::warning_banner(ui, &tr!("gui.configurator_running"));
+                        ui.add_space(8.0);
+                    }
                     match self.page {
                         Page::Overview => self.page_overview(ui),
                         Page::Buttons => self.page_buttons(ui),

@@ -2,7 +2,7 @@
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Response, RichText, Sense, Stroke, Ui};
 
-use crate::theme::{self, ACCENT, CARD_RADIUS, DANGER};
+use crate::theme::{self, ACCENT, CARD_RADIUS, DANGER, WARNING};
 
 /// Framed card that fills the available width.
 pub fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
@@ -35,6 +35,22 @@ pub fn card_title_in(ui: &mut Ui, icon: &str, color: Color32, title: &str, subti
         ui.label(RichText::new(s).color(p.muted));
     }
     ui.add_space(4.0);
+}
+
+/// Yellow framed note with a warning icon (e.g. a program of the original software is running).
+pub fn warning_banner(ui: &mut Ui, text: &str) {
+    egui::Frame::new()
+        .fill(WARNING.gamma_multiply(0.12))
+        .stroke(Stroke::new(1.0, WARNING.gamma_multiply(0.7)))
+        .corner_radius(CornerRadius::same(CARD_RADIUS))
+        .inner_margin(12)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(egui_phosphor::regular::WARNING).size(18.0).color(WARNING));
+                ui.add(egui::Label::new(text).wrap());
+            });
+        });
 }
 
 pub fn page_header(ui: &mut Ui, title: &str, subtitle: &str) {

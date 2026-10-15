@@ -10,8 +10,9 @@ use eframe::egui::{self, ThemePreference};
 use m6980x_core::functions::{self as fnc, Function};
 use m6980x_core::macro_steps::{self as steps, Step};
 use m6980x_core::names::{button_name, rate_hz};
+use m6980x_core::pc::{self, OriginalSoftware, WINDOWS_DEFAULT};
 use m6980x_core::protocol::{
-    BUTTONS, DPI_BUTTON_STAGES, DpiStage, FACTORY_INTERVAL_MS, LED_LEVELS, PROFILES, ROM_SIZE,
+    BUTTONS, DPI_BUTTON_STAGES, DpiStage, FACTORY_INTERVAL_MS, LED_LEVELS, PROFILES, ROM_SIZE, TiltMode,
 };
 use m6980x_core::rom::{
     self as romlayout, ICONS_EMBEDDED, MACRO_INFO_BASE, MACRO_INFO_SIZE, MACRO_NAME_LEN, MACRO_SLOT_SIZE, MACRO_SLOTS,
@@ -29,6 +30,7 @@ pub const DPI_LINKED_KEY: &str = "dpi_linked";
 pub const THEME_KEY: &str = "theme";
 pub const MIN_DPI: i64 = 90;
 const LIVE_INTERVAL: Duration = Duration::from_millis(1500);
+const ORIGINAL_CHECK_INTERVAL: Duration = Duration::from_secs(3);
 /// the 20 macro info entries (name + icon byte)
 const INFO_TABLE: usize = MACRO_SLOTS * MACRO_INFO_SIZE;
 /// how long a success message stays in the macro editor
@@ -139,6 +141,14 @@ pub struct App {
     pub task: Option<Task>,
     /// success message of the last macro job and when it came
     pub flash: Option<(String, Instant)>,
+
+    /// Windows scroll speed [lines per notch, characters per tilt step] on the sliders
+    pub scroll: [u32; 2],
+    /// values last read from / written to Windows
+    pub scroll_pc: [u32; 2],
+    /// programs of the original software, checked every few seconds
+    pub original: OriginalSoftware,
+    last_original_check: Instant,
 }
 
 pub fn done(f: impl FnOnce(&mut App) + Send + 'static) -> Result<Apply> {
@@ -171,6 +181,11 @@ fn load_icon_texts(lang: &str) -> HashMap<u8, String> {
 
 fn stage_dpi(st: &DpiStage) -> [i64; 2] {
     [i64::from(st.x_dpi()), i64::from(st.y_dpi())]
+}
+
+/// Windows scroll speed [lines, characters]; the Windows default where it cannot be read (other systems).
+fn read_scroll() -> [u32; 2] {
+    [pc::scroll_lines().unwrap_or(WINDOWS_DEFAULT), pc::scroll_chars().unwrap_or(WINDOWS_DEFAULT)]
 }
 
 impl App {
@@ -229,6 +244,10 @@ impl App {
             recorder: Recorder::default(),
             task: None,
             flash: None,
+            scroll: read_scroll(),
+            scroll_pc: read_scroll(),
+            original: pc::original_software(),
+            last_original_check: Instant::now(),
         };
         if fake {
             app.log(tr!("gui.dry_run"));
@@ -481,6 +500,58 @@ impl App {
     pub fn save_now(&mut self) {
         self.run(tr!("gui.save_permanently"), false, |g| {
             g.save_settings()?;
+            nothing()
+        });
+    }
+
+    // -- PC settings ------------------------------------------------------------------
+    /// Which programs of the original software run (Tilt.exe changes the tilt mode, Macro.exe uses the mouse).
+    pub fn poll_original(&mut self) {
+        if self.last_original_check.elapsed() >= ORIGINAL_CHECK_INTERVAL {
+            self.last_original_check = Instant::now();
+            self.original = pc::original_software();
+        }
+    }
+
+    /// Writes slider `axis` (0 = lines per notch, 1 = characters per tilt step) to Windows if it changed.
+    /// The dry run (`--fake`) leaves Windows alone.
+    pub fn commit_scroll(&mut self, axis: usize) {
+        let value = self.scroll[axis];
+        if value == self.scroll_pc[axis] {
+            return;
+        }
+        let result = match (self.fake, axis) {
+            (true, _) => Ok(()),
+            (false, 0) => pc::set_scroll_lines(value),
+            (false, _) => pc::set_scroll_chars(value),
+        };
+        match result {
+            Ok(()) => {
+                self.scroll_pc[axis] = value;
+                self.log(if axis == 0 {
+                    tr!("gui.scroll_lines_set", n = value)
+                } else {
+                    tr!("gui.scroll_chars_set", n = value)
+                });
+            }
+            Err(e) => {
+                self.error = Some((tr!("gui.error"), e.to_string()));
+                self.scroll = if self.fake { self.scroll_pc } else { read_scroll() };
+                self.scroll_pc = self.scroll;
+            }
+        }
+    }
+
+    pub fn scroll_windows_default(&mut self) {
+        self.scroll = [WINDOWS_DEFAULT; 2];
+        self.commit_scroll(0);
+        self.commit_scroll(1);
+    }
+
+    /// Tilt wheel back to native mode (Tilt.exe of the original switches it to its own mode when it starts).
+    pub fn tilt_native(&mut self) {
+        self.run(tr!("gui.tilt_native_job"), false, |g| {
+            g.set_tilt_mode(TiltMode::Native)?;
             nothing()
         });
     }

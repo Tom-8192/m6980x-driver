@@ -74,6 +74,8 @@ m6980x_configtool dpi set 1 1800 1200  # stage 1: X 1800, Y 1200 (steps of 90, m
 m6980x_configtool dpi default          # factory values 810/1620/3240 and 500 Hz
 m6980x_configtool watch                # watch profile/DPI stage live
 m6980x_configtool rate 500             # 1000/500/333/250/200/166/142/125 Hz
+m6980x_configtool scroll vertical 3    # Windows: lines per wheel notch (horizontal = characters per tilt step)
+m6980x_configtool tilt-mode native     # tilt wheel back to native after the original's Tilt.exe (Windows)
 m6980x_configtool buttons              # button assignment of all 3 profiles
 m6980x_configtool functions            # assignable functions
 m6980x_configtool button 1 back copy          # profile 1, rear side button = Ctrl+C

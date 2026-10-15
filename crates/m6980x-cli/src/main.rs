@@ -18,10 +18,10 @@ use m6980x_core::names::{
     rate_hz,
 };
 use m6980x_core::protocol::{
-    BUTTONS, DPI_BUTTON_STAGES, FACTORY_INTERVAL_MS, M6980X, PROFILES, ROM_SIZE, SUPPORTED_MODEL,
+    BUTTONS, DPI_BUTTON_STAGES, FACTORY_INTERVAL_MS, M6980X, PROFILES, ROM_SIZE, SUPPORTED_MODEL, TiltMode,
 };
 use m6980x_core::rom::{self as romlayout, MACRO_NAME_LEN, MACRO_SLOT_SIZE};
-use m6980x_core::{Error, Result, Transport, backup, open_transport, tr};
+use m6980x_core::{Error, Result, Transport, backup, open_transport, pc, tr};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -129,6 +129,22 @@ enum Cmd {
         #[arg(long)]
         rom: Option<PathBuf>,
     },
+    Scroll {
+        #[arg(value_parser = parse_axis, requires = "value")]
+        axis: Option<Axis>,
+        #[arg(value_parser = clap::value_parser!(u32).range(i64::from(pc::SCROLL_MIN)..=i64::from(pc::SCROLL_MAX)))]
+        value: Option<u32>,
+    },
+    TiltMode {
+        #[arg(value_parser = parse_tilt)]
+        mode: TiltMode,
+    },
+}
+
+#[derive(Clone, Copy)]
+enum Axis {
+    Vertical,
+    Horizontal,
 }
 
 #[derive(Subcommand)]
@@ -155,6 +171,25 @@ enum DpiCmd {
 
 fn parse_mode(text: &str) -> std::result::Result<u8, String> {
     fnc::mode_value(text).ok_or_else(|| tr!("cli.expected_one_of", names = fnc::mode_names().join(", ")))
+}
+
+fn parse_axis(text: &str) -> std::result::Result<Axis, String> {
+    match () {
+        _ if i18n::matches("scroll.vertical", text) => Ok(Axis::Vertical),
+        _ if i18n::matches("scroll.horizontal", text) => Ok(Axis::Horizontal),
+        _ => Err(tr!(
+            "cli.expected_one_of",
+            names = [i18n::name("scroll.vertical"), i18n::name("scroll.horizontal")].join(", ")
+        )),
+    }
+}
+
+fn parse_tilt(text: &str) -> std::result::Result<TiltMode, String> {
+    match () {
+        _ if i18n::matches("tilt.native", text) => Ok(TiltMode::Native),
+        _ if i18n::matches("tilt.driver", text) => Ok(TiltMode::Driver),
+        _ => Err(tr!("cli.expected_one_of", names = [i18n::name("tilt.native"), i18n::name("tilt.driver")].join(", "))),
+    }
 }
 
 fn parse_lang(text: &str) -> std::result::Result<String, String> {
@@ -199,6 +234,7 @@ fn main() -> ExitCode {
             Ok(())
         }
         Cmd::Macros { rom: Some(path) } => backup::load_rom_file(path).map(|data| print_macros(&data)),
+        Cmd::Scroll { axis, value } => cmd_scroll(*axis, *value),
         _ => with_device(&cli),
     };
     match result {
@@ -211,6 +247,9 @@ fn main() -> ExitCode {
 }
 
 fn with_device(cli: &Cli) -> Result<()> {
+    if pc::original_software().configurator {
+        eprintln!("{}", tr!("cli.configurator_running"));
+    }
     let mut g = M6980X::new(open_transport(cli.device.as_deref())?);
     if !matches!(cli.command, Cmd::Info { .. }) {
         g.check_model()?; // info stays usable to see which model is plugged in
@@ -270,7 +309,7 @@ fn run(g: &mut G, cmd: &Cmd) -> Result<()> {
                     slot = slot,
                     file = file.display(),
                     count = record.len(),
-                    into = mode.unwrap_or("None".into()),
+                    mode = mode.unwrap_or("None".into()),
                     events = events.join(", ")
                 )
             );
@@ -290,7 +329,7 @@ fn run(g: &mut G, cmd: &Cmd) -> Result<()> {
                     slot = slot,
                     name = py_repr(&name),
                     count = record.len(),
-                    into = mode.unwrap_or("None".into()),
+                    mode = mode.unwrap_or("None".into()),
                     events = events.join(", ")
                 )
             );
@@ -317,8 +356,8 @@ fn run(g: &mut G, cmd: &Cmd) -> Result<()> {
                 tr!(
                     "cli.backup_done",
                     file = file.display(),
-                    active_profile = data.active_profile + 1,
-                    report_interval_ms = rate_hz(data.report_interval_ms),
+                    profile = data.active_profile + 1,
+                    hz = rate_hz(data.report_interval_ms),
                     count = data.rom.len() / 2
                 )
             );
@@ -350,7 +389,7 @@ fn run(g: &mut G, cmd: &Cmd) -> Result<()> {
         Cmd::RomImport { file } => {
             let data = backup::load_rom_file(file)?;
             let left = backup::import_rom(g, &data, &mut |m| println!("{m}"))?;
-            println!("{}", tr!("cli.imported", file = file.display(), data = &sha256(&data)[..8]));
+            println!("{}", tr!("cli.imported", file = file.display(), sha = &sha256(&data)[..8]));
             if !left.is_empty() {
                 print_left(&left);
             }
@@ -362,7 +401,19 @@ fn run(g: &mut G, cmd: &Cmd) -> Result<()> {
             print_macros(&data);
             Ok(())
         }
-        Cmd::Gui | Cmd::Functions => unreachable!("handled without a device"),
+        Cmd::TiltMode { mode } => {
+            g.set_tilt_mode(*mode)?;
+            let key = match mode {
+                TiltMode::Native => "cli.tilt_native_done",
+                TiltMode::Driver => "cli.tilt_driver_done",
+            };
+            println!("{}", i18n::text(key));
+            if *mode == TiltMode::Native && pc::original_software().tilt {
+                println!("{}", tr!("cli.tilt_running_note"));
+            }
+            Ok(())
+        }
+        Cmd::Gui | Cmd::Functions | Cmd::Scroll { .. } => unreachable!("handled without a device"),
     }
 }
 
@@ -573,6 +624,23 @@ fn cmd_functions() {
     }
 }
 
+/// Windows scroll speed (PC setting, no mouse needed); like the scroll area on the original's DPI page.
+fn cmd_scroll(axis: Option<Axis>, value: Option<u32>) -> Result<()> {
+    match (axis, value) {
+        (Some(Axis::Vertical), Some(v)) => pc::set_scroll_lines(v)?,
+        (Some(Axis::Horizontal), Some(v)) => pc::set_scroll_chars(v)?,
+        _ => {}
+    }
+    let lines = pc::scroll_lines()?;
+    let lines = if lines == pc::PAGE_SCROLL { tr!("cli.scroll_page") } else { tr!("cli.scroll_lines", n = lines) };
+    println!("{:<24}{lines}", tr!("cli.scroll_vertical"));
+    println!("{:<24}{}", tr!("cli.scroll_horizontal"), tr!("cli.scroll_chars", n = pc::scroll_chars()?));
+    if pc::original_software().tilt {
+        println!("{}", tr!("cli.tilt_running_note"));
+    }
+    Ok(())
+}
+
 fn read_full_rom(g: &mut G) -> Result<Vec<u8>> {
     if !std::io::stderr().is_terminal() {
         return g.read_rom(0, ROM_SIZE);
@@ -622,8 +690,8 @@ fn cmd_macro(g: &mut G, slot: u8, name: &str, events: &[String], mode: u8, icon:
             name = py_repr(name),
             count = record.len(),
             macro_slot_size = MACRO_SLOT_SIZE,
-            slot2 = format_icon(g.macro_icon(slot)?),
-            into = mode.unwrap_or("None".into()),
+            icon = format_icon(g.macro_icon(slot)?),
+            mode = mode.unwrap_or("None".into()),
             events = events.join(", ")
         )
     );

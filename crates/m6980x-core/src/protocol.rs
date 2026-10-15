@@ -49,6 +49,19 @@ pub const SUPPORTED_MODEL: &str = "6980X";
 pub const FACTORY_DPI: [u32; 3] = [810, 1620, 3240];
 /// 500 Hz: the original's default button (0x44abbc) also writes 01 8B 02
 pub const FACTORY_INTERVAL_MS: u8 = 2;
+/// String descriptors of the tilt mode switch (Tilt.exe): 120 must be read right before 200/201.
+pub const TILT_UNLOCK_STRING: u8 = 120;
+pub const TILT_DRIVER_STRING: u8 = 200;
+pub const TILT_NATIVE_STRING: u8 = 201;
+
+/// How the mouse reports the tilt wheel when the tilt button is on "default".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TiltMode {
+    /// AC Pan in byte 6 of the normal mouse report; Windows and Linux scroll by themselves (state after plugging in).
+    Native,
+    /// vendor report `01 12 03 03 ±1` on interface 1 instead; only Tilt.exe of the original turns it into scrolling.
+    Driver,
+}
 
 pub type Reply = [u8; REPORT_LEN];
 
@@ -240,6 +253,35 @@ impl<T: Transport> M6980X<T> {
             ));
         }
         Ok(ident)
+    }
+
+    /// Tilt wheel mode, switched like Tilt.exe of the original (`0x404E70`/`0x405200`, docs/PROTOCOL.md
+    /// "Scroll settings"): request the serial number twice (fails, the mouse has none), read string descriptor 120
+    /// (answer starts with "G4" or reads "Areson"), then request 200 or 201 - the request itself is the command.
+    /// Without the serial number requests or without 120 the mouse ignores the command (tested). The mode is not
+    /// stored: after unplugging the mouse starts native.
+    pub fn set_tilt_mode(&mut self, mode: TiltMode) -> Result<()> {
+        self.t.lock()?;
+        let result = self.tilt_sequence(mode);
+        self.t.unlock();
+        result
+    }
+
+    fn tilt_sequence(&mut self, mode: TiltMode) -> Result<()> {
+        for _ in 0..2 {
+            // part of the unlock, the answer does not matter (the mouse has no serial number)
+            let _ = self.t.serial_number();
+        }
+        let answer = self.t.string_descriptor(TILT_UNLOCK_STRING)?;
+        let areson: Vec<u8> = "Areson".encode_utf16().flat_map(u16::to_le_bytes).collect();
+        if !answer.starts_with(b"G4") && !answer.starts_with(&areson) {
+            return device(tr!("error.tilt_not_recognised", raw = hex(&answer[..answer.len().min(8)])));
+        }
+        let index = match mode {
+            TiltMode::Native => TILT_NATIVE_STRING,
+            TiltMode::Driver => TILT_DRIVER_STRING,
+        };
+        self.t.string_descriptor(index).map(|_| ())
     }
 
     pub fn name(&mut self) -> Result<String> {

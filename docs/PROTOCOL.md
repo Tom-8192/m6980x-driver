@@ -396,16 +396,104 @@ flags set by the firmware); then Tom's state restored byte-identically.
 - **LED:** 3 levels per channel give 27 colours (all accepted by the mouse); the original offers only 8 of them.
 - **Report rate:** manual 125/250/500/1000 Hz. The software's slider also knows 333 Hz etc. (1–8 ms).
 - **9 assignable buttons** (7 + 2) = device buttons 0–4 and 6–9.
-- **Scroll speed / Tilt.exe** ("Areson Tilt"; Areson is the OEM, hence manufacturer "A....."): a pure PC helper
-  program from the Windows XP era that retrofits horizontal scrolling with the tilt wheel. It reads raw input
-  (`RegisterRawInputDevices`/`GetRawInputData`), looks for the scroll bar under the pointer (`WindowFromPoint`,
-  `EnumChildWindows`, classes "ScrollBar"/"NUIScrollbar"/"TScrollBar") and sends it scroll messages on a timer.
-  The settings are in the registry under `SOFTWARE\Tilt_gaming` (HKCU or HKLM, not checked), controlled by
-  `/enable`, `/disable` and `/speed=`.
-  It sends nothing to the mouse. Since Vista and on Linux, the operating system does this itself (AC Pan in the
-  HID descriptor).
+- **Scroll speed / Tilt.exe** ("Areson Tilt"; Areson is the OEM, hence manufacturer "A....."): a Win32 helper
+  (2009, still runs on Windows 10) that does horizontal scrolling with the tilt wheel itself. It reads raw input
+  from the vendor interface, looks for the scroll bar under the pointer (`WindowFromPoint`, `EnumChildWindows`,
+  classes "ScrollBar"/"NUIScrollbar"/"TScrollBar") and sends it scroll messages. **It does switch a mode in the
+  mouse** (string-descriptor trick, see "Scroll settings" below). Settings: `HKLM\SOFTWARE\Tilt_gaming`, controlled
+  by `/enable`, `/disable` and `/speed=`.
 - **Macro export/import** of the original only concerns files on the PC. The mouse has no command for it.
   Format see "Macro file of the original" at the end.
+
+## Scroll settings (DPI page `TForm4`) ✅ code (2026-10-15)
+
+The DPI page of `Macro.exe` (form `TForm4`, same page as report rate) has a scroll area that was overlooked at
+first: a checkbox "Disable the tilt wheel driver" (`CheckBox1`, caption `Label4`), two image sliders
+"vertical speed" (`vs.bmp`, object `+0x3B0`) and "horizontal speed" (`HS.bmp`, object `+0x3B4`) plus their own
+Apply (`Image14`) and Default (`Image15`) buttons. `Macro.exe` itself sends nothing to the mouse here, but the
+checkbox makes **Tilt.exe** switch a tilt mode in the mouse (see below).
+
+| Element | Range | Read at start | Written by | Effect |
+|---|---|---|---|---|
+| vertical speed | 1–100 (`0x450AB4(slider, 1, 100)`) | `SystemParametersInfoA(SPI_GETWHEELSCROLLLINES)` (`0x44C160`) | Apply `0x44D994`: `SystemParametersInfoA(SPI_SETWHEELSCROLLLINES = 0x69, n, 0, SPIF_UPDATEINIFILE \| SPIF_SENDCHANGE)` | Windows "lines per wheel notch", system-wide |
+| horizontal speed | 1–40 (`0x450AB4(slider, 1, 40)`) | `HKLM\Software\Tilt_gaming`, DWORD `Speed` (created with 1 if missing) | Apply: `WinExec("Tilt.exe /speed=<n>")` | Tilt.exe only, see below |
+| checkbox | – | same key, DWORD `enable` (created with 1 if missing); checked = `enable == 0` | on click `0x44F86C`: checked → `Tilt.exe /disable`, unchecked → `Tilt.exe /enable /Speed=<n>` | switches Tilt.exe on/off; checked also disables the horizontal slider |
+
+- Apply sends both values at once (SPI call first, then `Tilt.exe /speed=`). Moving a slider only updates the
+  display (`0x44F1DC`/`0x44F2A0` compute a level 1–4 for the picture, no system call).
+- **Default** (`0x44F364`) sets **both sliders to 1** and applies them right away: one line per wheel notch
+  (Windows default is 3) and Tilt speed 1.
+- The page reads the values only when it is created. Writing to `HKLM` needs admin rights; without them Windows
+  virtualizes or rejects the write.
+
+**Tilt.exe** (`Tilt.exe` SHA-256 `941679bd…`, MFC, entry `0x4010F0`):
+
+- **Command line:** `/speed=<n>`, `/enable`, `/disable` write `Speed`/`Enable` to `HKLM\SOFTWARE\Tilt_gaming` and
+  pulse `Local\TiltinnoWaitEventSpeed`. The running instance then reloads both values (`0x4018B0`).
+- **Mode switch in the mouse (string-descriptor trick)** ✅ code and device: Tilt.exe opens the HID device whose
+  feature report length is 9 (= interface 0 of the M6980X), reads the serial number string twice (fails, the mouse
+  has none), reads string descriptor **index 120** and accepts the device if it reads "Areson" or if its first two
+  bytes are "G4". Then it requests string descriptor **index 200** (tilt mode) or **index 201** (native mode).
+  The request itself is the command. **The whole sequence is required:** 200/201 alone (4×) and 120 + 200 without
+  the serial number requests (1×, Python; 1×, first Rust version) had no effect on the device; serial ×2 + 120 +
+  command worked every time (3× Python, 2× `m6980x_configtool tilt-mode`). Whether one serial request would do
+  is not tested. Index 120 returns bytes `47 34 2D 09 01 5A 05 3F` = "G4…" on this mouse.
+- **When Tilt.exe switches:**
+  - start routine `0x404350` (start / device arrival): `0x404A70` checks VID `E0FF`, sends 120 + **200** (without
+    serial requests), then the full sequence with 200 (`Enable` ≠ 0, `0x405200`) or 201 (`Enable` = 0, `0x404E70`)
+    – so with the default `Enable` = 1 the mouse is in tilt mode whenever Tilt.exe has started;
+  - `Enable` changed via `/enable`/`/disable` (`0x4018B0`): `0x405200` (200) or `0x404E70` (201);
+  - on exit (`0x402FB0`): 201.
+  ❓ At the very beginning of the test the mouse was in native mode although Tilt.exe was running (since login).
+  Likely explanation (Tom): he had set the checkbox to "disable" in the original before, which sends 201. The
+  registry still read `Enable` = 1 at the start of the test, so this is not certain.
+- **Raw input:** `RegisterRawInputDevices` for usage page `FF03`, usage 1, `RIDEV_INPUTSINK` (= interface 1 of the
+  mouse). Handler `0x404200` only reacts to reports with `byte1 = 0x12` and `byte3 = 0x03` (size 8 or 16), adds
+  `delta × (1 + Speed)` (delta = signed `byte4`) to a counter, and a worker thread (`0x403A40`) posts that many
+  `WM_HSCROLL` (`0x114`) to the window under the pointer, with special cases (Firefox `WM_MOUSEHWHEEL`, iTunes,
+  Excel, Illustrator, Visio).
+
+**Device tests (2026-10-15, Windows 10, `…\GHOST_Tool\re_tools\tiltmode.py` and `tiltsend.py [--full]`)** ✅
+Tom tilted and reported what scrolled; the script listened on interface 1 (vendor `FF03` and consumer collection).
+
+| Step | Interface 1 while tilting | Horizontal scrolling |
+|---|---|---|
+| Tilt.exe killed hard (mode untouched) | nothing | native |
+| index 200 alone (hidapi) | nothing | native – no effect |
+| Tilt.exe started, `/disable`, `/enable /Speed=20` | `01 12 03 03 FF` (left) / `01 12 03 03 01` (right) | much faster (Tilt.exe) |
+| tilt mode, Tilt.exe killed, mouse unplugged and replugged | nothing | native |
+| Tilt.exe started with `/speed=1` (start routine), then killed | right: `01 12 03 03 01` | none (no Tilt.exe) |
+| index 201 alone (`HidD_GetIndexedString`, 0x200 buffer) | right: still `01 12 03 03 01` | none – no effect |
+| **full sequence + 201** | nothing | **native** |
+| **full sequence + 200** | right: `01 12 03 03 01` (11×) | **none** |
+| full sequence + 201 (clean-up) | – | native |
+| 120 + 200 without serial requests (Python, and the first Rust version) | nothing | native – no effect |
+| **`m6980x_configtool tilt-mode treiber`** (serial ×2 + 120 + 200) | right: `01 12 03 03 01` (21×) | Tilt.exe |
+| **`m6980x_configtool tilt-mode nativ`** | nothing | native |
+
+- **Index 200 = tilt mode, index 201 = native mode** (AC Pan in byte 6 of the normal report), each only right after
+  serial ×2 + 120. Answers: 200 returns `09 04` (like string 0), 201 returns "A....." (like string 1).
+- Tilt report: `01 12 03 03 <delta>` (delta signed, ±1 per step). Holding the wheel repeats it after ~320 ms every
+  ~64 ms. The profile report `01 12 03 01 <profile>` uses the same layout with byte3 = `01`.
+- **The mode is volatile:** after unplugging, the mouse always starts in native mode.
+- **Button assignment wins over tilt mode:** with tilt-left set to "volume up" (profile 1) the mouse sends
+  consumer `03 E9 00` / `03 00 00` in both modes. Only a tilt button on "default" becomes the tilt report.
+- Tom's earlier observation fits: checkbox set → scrolling still works, slider has no effect; not set → slider works.
+- Afterwards: button restored from `backups/vor_tilttest_2026-10-15.json` (ROM byte-identical, new backup equal),
+  Tilt.exe running like Tom's autostart, mouse in tilt mode (as after every start of Tilt.exe).
+
+**In `m6980x_configtool` (since 2026-10-15, not released yet):**
+- `scroll [vertical|horizontal <1-100>]` and the "Scrolling" card on the performance page (Windows only):
+  vertical = `SPI_SETWHEELSCROLLLINES` exactly as the original; horizontal = `SPI_SETWHEELSCROLLCHARS`
+  (characters per AC Pan step in native mode; the original never touches it, Tilt.exe's speed only exists in its
+  tilt mode). Linux has no system-wide equivalent (desktop-specific, e.g. KDE `kdeglobals` `WheelScrollLines`).
+- `tilt-mode native|driver` and the "Tilt wheel native" button: `M6980X::set_tilt_mode` (serial ×2, 120, 201/200
+  on one handle opened like Tilt.exe). Windows only; on Linux not needed after a replug. There it would need USB
+  control transfers `GET_DESCRIPTOR(string, …)` (libusb/rusb or usbdevfs), hidraw cannot send them.
+- Tilt.exe running → note (CLI `scroll`/`tilt-mode`, GUI scroll card): it puts the mouse in tilt mode at every start,
+  then the Windows horizontal setting has no effect. Macro.exe running → warning (CLI on stderr, GUI banner):
+  it uses the same feature report channel without our lock.
+- Not done: an own tilt-mode driver like Tilt.exe (background program turning `01 12 03 03 ±1` into scrolling).
 
 ## DPI stage 4 (theoretical only)
 

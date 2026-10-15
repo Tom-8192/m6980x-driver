@@ -87,6 +87,19 @@ images**).
   tests. **Not yet clicked through by hand and not yet tried on the real mouse.**
 - Linux: compiles (cross-check `x86_64-unknown-linux-gnu`), not yet run with the mouse.
 
+### Scroll settings and tilt mode (2026-10-15, uncommitted until Tom agrees)
+
+- The scroll area on the original's DPI page had been overlooked; reverse engineered with Ghidra/REA and on the
+  device, see PROTOCOL.md "Scroll settings". Main finding: **Tilt.exe switches a tilt mode in the mouse** with a
+  string descriptor sequence (serial ×2, 120, then 200 = tilt mode / 201 = native); not stored in the mouse.
+- New: `pc.rs` (Windows scroll speed via `SystemParametersInfo`, detection of Tilt.exe/Macro.exe), transport
+  `string_descriptor`/`serial_number` (Windows; Linux returns "not supported"), `M6980X::set_tilt_mode`,
+  CLI `scroll` and `tilt-mode`, GUI card "Scrolling" on the performance page (Windows only) with the button
+  "Tilt wheel native", warning banner while Macro.exe runs. `tilt-mode` tested on the device in both directions.
+- Fixed: five CLI messages showed `%{…}` placeholders (wrong argument names, e.g. `backup`); new test
+  `crates/m6980x-core/tests/placeholders.rs` compares every `tr!` call with the language files.
+- GUI card only checked with `--fake` via screenshots (German/English); not clicked by hand.
+
 ### Python prototype 1.1
 
 - Python package `m6980x_configtool` with command line (`py -3 -m m6980x_configtool …`) and Tkinter GUI
@@ -121,6 +134,11 @@ images**).
    "ghost", so it is not confused with the official "Gigabyte GHOST" software (renamed on 2026-10-11).
 
 ## Tom's mouse – current state (restored after all tests)
+
+**Update 2026-10-15:** Tom reinstalled the original software on 2026-10-14 (Tilt.exe and GHOSTOPEN.exe in the
+autostart, so the mouse is in tilt mode after every login). The settings changed since the list below (e.g. LED
+255/255/0 in all profiles, DPI 810/3600/5850, profile 1 back = "Internet"); current full backup:
+`backups/vor_tilttest_2026-10-15.json`. The list below is the state of 2026-10-11.
 
 - Memory like `backups/rom_2026-10-11_original.bin`, with these exceptions (SHA-256 now `55906362…`):
   - Tom removed the leftover icon of the empty macro 6 (0x1CFC: `79` → `06`).

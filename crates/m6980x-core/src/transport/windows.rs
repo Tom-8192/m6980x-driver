@@ -3,13 +3,21 @@
 use std::ffi::CString;
 
 use hidapi::{HidApi, HidDevice};
-use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+use windows_sys::Win32::Devices::HumanInterfaceDevice::{HidD_GetIndexedString, HidD_GetSerialNumberString};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, HANDLE, INVALID_HANDLE_VALUE, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+};
+use windows_sys::Win32::Storage::FileSystem::{
+    CreateFileW, FILE_FLAG_OVERLAPPED, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+};
 use windows_sys::Win32::System::Threading::{CreateMutexW, ReleaseMutex, WaitForSingleObject};
 
 use super::{INTERFACE, LOCK_TIMEOUT_MS, PID, REPORT_LEN, Transport, VID, not_found, strip_report_id};
 use crate::{Error, Result, tr};
 
 const MUTEX_NAME: &str = "Local\\m6980x_configtool";
+/// buffer size Tilt.exe passes to HidD_GetIndexedString
+const STRING_BUFFER: usize = 0x200;
 
 pub struct HidapiTransport {
     dev: HidDevice,
@@ -17,6 +25,8 @@ pub struct HidapiTransport {
     path: String,
     mutex: HANDLE,
     locked: bool,
+    /// second handle for the string descriptor requests, opened on first use
+    strings: Option<HANDLE>,
 }
 
 fn hid_err(e: hidapi::HidError) -> Error {
@@ -41,7 +51,7 @@ impl HidapiTransport {
         if mutex.is_null() {
             return Err(Error::Transport(tr!("transport.lock_create_failed", error = std::io::Error::last_os_error())));
         }
-        Ok(Self { dev, _api: api, path: path.to_string_lossy().into_owned(), mutex, locked: false })
+        Ok(Self { dev, _api: api, path: path.to_string_lossy().into_owned(), mutex, locked: false, strings: None })
     }
 }
 
@@ -81,12 +91,69 @@ impl Transport for HidapiTransport {
     fn path(&self) -> String {
         self.path.clone()
     }
+
+    fn string_descriptor(&mut self, index: u8) -> Result<Vec<u8>> {
+        let handle = self.string_handle()?;
+        let mut buf = vec![0u8; STRING_BUFFER];
+        // SAFETY: buffer and length match; the handle lives as long as self.
+        let ok =
+            unsafe { HidD_GetIndexedString(handle, u32::from(index), buf.as_mut_ptr().cast(), STRING_BUFFER as u32) };
+        if !ok {
+            let e = std::io::Error::last_os_error();
+            return Err(Error::Transport(tr!("transport.string_failed", index = index, e = e)));
+        }
+        Ok(buf)
+    }
+
+    fn serial_number(&mut self) -> Result<Vec<u8>> {
+        let handle = self.string_handle()?;
+        let mut buf = vec![0u8; STRING_BUFFER];
+        // SAFETY: as above.
+        let ok = unsafe { HidD_GetSerialNumberString(handle, buf.as_mut_ptr().cast(), STRING_BUFFER as u32) };
+        if !ok {
+            return Err(Error::Transport(tr!("transport.serial_failed", e = std::io::Error::last_os_error())));
+        }
+        Ok(buf)
+    }
+}
+
+impl HidapiTransport {
+    /// Handle for the string requests like Tilt.exe opens it (`0x405200`: no access rights, overlapped). All requests
+    /// of the tilt mode switch go through the same handle, as in Tilt.exe; it stays open until the transport is dropped.
+    fn string_handle(&mut self) -> Result<HANDLE> {
+        if let Some(h) = self.strings {
+            return Ok(h);
+        }
+        let path: Vec<u16> = self.path.encode_utf16().chain(Some(0)).collect();
+        // SAFETY: null-terminated path; the handle is closed in Drop.
+        let handle = unsafe {
+            CreateFileW(
+                path.as_ptr(),
+                0,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                FILE_FLAG_OVERLAPPED,
+                std::ptr::null_mut(),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(Error::Transport(tr!("transport.string_open_failed", e = std::io::Error::last_os_error())));
+        }
+        self.strings = Some(handle);
+        Ok(handle)
+    }
 }
 
 impl Drop for HidapiTransport {
     fn drop(&mut self) {
         self.unlock();
-        // SAFETY: the handle is ours.
-        unsafe { CloseHandle(self.mutex) };
+        // SAFETY: the handles are ours.
+        unsafe {
+            CloseHandle(self.mutex);
+            if let Some(h) = self.strings {
+                CloseHandle(h);
+            }
+        }
     }
 }

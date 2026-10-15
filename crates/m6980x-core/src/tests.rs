@@ -82,6 +82,39 @@ fn supported_steps() {
 }
 
 #[test]
+fn tilt_mode_unlocks_before_each_switch() {
+    let mut g = mouse();
+    g.set_tilt_mode(TiltMode::Driver).unwrap();
+    assert!(g.t.tilt_driver);
+    g.set_tilt_mode(TiltMode::Native).unwrap();
+    assert!(!g.t.tilt_driver);
+    let unlock = [None, None, Some(120)];
+    let expected: Vec<Option<u8>> = [&unlock[..], &[Some(200)], &unlock[..], &[Some(201)]].concat();
+    assert_eq!(g.t.strings, expected);
+    assert!(g.t.sent.is_empty(), "no feature report needed");
+}
+
+#[test]
+fn tilt_mode_refuses_unknown_answer() {
+    struct Other(FakeMouse);
+    impl Transport for Other {
+        fn set_feature(&mut self, data: &[u8; REPORT_LEN]) -> Result<()> {
+            self.0.set_feature(data)
+        }
+        fn get_feature(&mut self) -> Result<[u8; REPORT_LEN]> {
+            self.0.get_feature()
+        }
+        fn string_descriptor(&mut self, index: u8) -> Result<Vec<u8>> {
+            self.0.strings.push(Some(index));
+            Ok(vec![0x41, 0, 0x2E, 0])
+        }
+    }
+    let mut g = fast(Other(FakeMouse::new()));
+    assert!(is_device(g.set_tilt_mode(TiltMode::Native)));
+    assert_eq!(g.t.0.strings, [Some(120)], "no command after a wrong answer");
+}
+
+#[test]
 fn led_and_profile() {
     let mut g = mouse();
     assert_eq!(g.led_color(1).unwrap(), [0, 2, 2]);

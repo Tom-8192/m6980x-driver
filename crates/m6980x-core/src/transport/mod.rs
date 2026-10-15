@@ -37,6 +37,16 @@ pub trait Transport {
     fn path(&self) -> String {
         String::new()
     }
+    /// Raw bytes of USB string descriptor `index`. The tilt mode switch is a sequence of such requests
+    /// (`M6980X::set_tilt_mode`); not every platform can send them.
+    fn string_descriptor(&mut self, index: u8) -> Result<Vec<u8>> {
+        let _ = index;
+        Err(Error::Transport(tr!("transport.string_unsupported")))
+    }
+    /// Serial number string request (part of the tilt mode switch; the M6980X has no serial number, so it fails).
+    fn serial_number(&mut self) -> Result<Vec<u8>> {
+        Err(Error::Transport(tr!("transport.string_unsupported")))
+    }
 }
 
 impl<T: Transport + ?Sized> Transport for Box<T> {
@@ -54,6 +64,12 @@ impl<T: Transport + ?Sized> Transport for Box<T> {
     }
     fn path(&self) -> String {
         (**self).path()
+    }
+    fn string_descriptor(&mut self, index: u8) -> Result<Vec<u8>> {
+        (**self).string_descriptor(index)
+    }
+    fn serial_number(&mut self) -> Result<Vec<u8>> {
+        (**self).serial_number()
     }
 }
 
