@@ -9,6 +9,7 @@
 
 mod app;
 mod hid_keys;
+mod icons;
 mod mouse_art;
 mod pages;
 mod recorder;

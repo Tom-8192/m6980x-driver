@@ -123,6 +123,7 @@ cargo test --workspace
 | `docs/PROTOCOL.md` | Protocol with levels of evidence |
 | `docs/HANDOVER.md` | Project status, guidelines, open tasks |
 | `assets/icon_descriptions.json` | Descriptions of the macro pictures (basis for own icons, no Gigabyte images) |
+| `assets/icons/` | Own macro icons (made with an image AI from those descriptions) and their build script |
 | `locales/` | Translations, one YAML file per language |
 | `linux/` | udev rule |
 | `prototype/python/` | Python prototype 1.1 (reference, source of the parity fixtures) |

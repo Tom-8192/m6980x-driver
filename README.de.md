@@ -122,6 +122,7 @@ cargo test --workspace
 | `docs/PROTOCOL.md` | Protokoll mit Belegstufen (englisch) |
 | `docs/HANDOVER.md` | Projektstand, Vorgaben, offene Aufgaben (englisch) |
 | `assets/icon_descriptions.json` | Texte zu den Makrobildern (Grundlage für eigene Symbole, keine Gigabyte-Bilder) |
+| `assets/icons/` | Eigene Makrobilder (mit einer Bild-KI aus diesen Texten erstellt) und ihr Erzeugungsskript |
 | `locales/` | Übersetzungen, eine YAML-Datei pro Sprache |
 | `linux/` | udev-Regel |
 | `prototype/python/` | Python-Prototyp 1.1 (Referenz, Quelle der Paritäts-Fixtures) |

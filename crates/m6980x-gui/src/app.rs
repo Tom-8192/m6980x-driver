@@ -19,6 +19,7 @@ use m6980x_core::rom::{
 };
 use m6980x_core::{Result, backup, i18n, tr};
 
+use crate::icons::{IconPicker, MacroIcons};
 use crate::recorder::Recorder;
 use crate::theme;
 use crate::worker::{Apply, Device, G};
@@ -133,6 +134,9 @@ pub struct App {
     pub m_name: String,
     pub m_mode: usize,
     pub m_icon: Option<u8>,
+    pub icons: MacroIcons,
+    /// open icon dialog
+    pub icon_picker: Option<IconPicker>,
     pub m_steps: Vec<Step>,
     pub m_text: String,
     pub m_text_mode: bool,
@@ -238,6 +242,8 @@ impl App {
             m_name: String::new(),
             m_mode: 0,
             m_icon: None,
+            icons: MacroIcons::default(),
+            icon_picker: None,
             m_steps: Vec::new(),
             m_text: String::new(),
             m_text_mode: false,

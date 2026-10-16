@@ -125,8 +125,8 @@ images**).
 2. **DPI stage 4** exists in memory but is useless (the mouse only cycles 3 stages): only mention it in the docs,
    CLI/GUI do not show it. Backup/restore silently include it.
 3. **LED: 27 colours** (3 levels per channel); the 8 of the original software are only a manufacturer limitation.
-4. **No Gigabyte images in the final build**: there are only texts (`assets/icon_descriptions.json`) from which own,
-   copyright-free icons will later be created with an image AI. Image folders, original EXEs and captures are in
+4. **No Gigabyte images in the final build**: only own icons, created with an image AI from the texts in
+   `assets/icon_descriptions.json` (`assets/icons/`, see below). Image folders, original EXEs and captures are in
    `.gitignore`.
 5. Write tests on the mouse only after agreement; always back up first (`m6980x_configtool backup`) and restore the
    memory byte-identically afterwards (succeeded every time so far; SHA-256 of the original memory `44d6fbae…`, current
@@ -179,7 +179,13 @@ autostart, so the mouse is in tilt mode after every login). The settings changed
    wrong 130-packet "init" at every start (overwrites DPI stage 3 and register 0B, activates profile 1),
    ignores the busy/done handshake, sends LED values 0–255 instead of 0–2 and switches the profile when changing the
    colour. Correct would be: only `01 86 <profile> R G B` with handshake, without init.
-3. **Own icons** created with an image AI from `assets/icon_descriptions.json` and shown in the GUI.
+3. **Own icons**: done on branch `macro-icons` (not merged yet). 41 own AI icons (0 = empty slot, 1–40 = pictures)
+   plus an empty frame, 128×128 WebP q90 (135 KB in total, measured against PNG 984 KB / lossless WebP 648 KB with
+   no visible difference), embedded via `include_bytes!` (`crates/m6980x-gui/src/icons.rs`). 41–100 are drawn as
+   the frame with a silver number. GUI: icon preview + "Choose icon…" dialog with a 10-column grid in the macro
+   editor, small icon in the macro list. Rebuild the files with `py -3 assets/icons/make_icons.py <folder> --frame
+   <png>` (sources on Tom's desktop, `ghost icons/rebuilt_icons_hires` + `master_button_plate_rounded.png`).
+   Checked with `--fake` via screenshots (dark theme, German); not yet on the mouse.
 4. GUI 2.2 (see above): Tom to try it by hand and on the mouse (recording, instant apply, reconnect).
 5. Keyboard layout of the macro text: key names follow the German layout in every UI language (y/z swapped);
    possibly an option for other layouts.

@@ -3,12 +3,37 @@ use egui_phosphor::regular as icon;
 use m6980x_core::functions::{self as fnc, KEYS, MOUSE_BUTTONS, NAMED_KEYS, key_name};
 use m6980x_core::i18n;
 use m6980x_core::macro_steps::{self as steps, Step};
-use m6980x_core::rom::{self as romlayout, ICON_COUNT, MACRO_NAME_LEN, MACRO_SLOT_SIZE, MACRO_SLOTS};
+use m6980x_core::rom::{self as romlayout, ICON_COUNT, ICONS_EMBEDDED, MACRO_NAME_LEN, MACRO_SLOT_SIZE, MACRO_SLOTS};
 use m6980x_core::tr;
 
 use crate::app::{App, FLASH_TIME, MODES};
-use crate::theme::{self, ACCENT, DANGER, SUCCESS};
+use crate::icons::{IconPicker, MacroIcons};
+use crate::theme::{self, ACCENT, DANGER, RADIUS, SUCCESS};
 use crate::widgets::{self, card, card_title, page_header, segmented, two_columns};
+
+/// icon dialog: tiles per row, tile size and gap in points
+const PICKER_COLUMNS: usize = 10;
+const TILE: f32 = 58.0;
+const TILE_GAP: f32 = 6.0;
+
+/// One clickable tile of the icon dialog (highlighted when hovered, framed in the accent colour when chosen).
+fn icon_tile(ui: &mut Ui, icons: &mut MacroIcons, icon: Option<u8>, selected: bool) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(TILE, TILE), Sense::click());
+    let pal = theme::palette(ui.ctx());
+    let painter = ui.painter();
+    if selected {
+        painter.rect_filled(rect, RADIUS, pal.accent_soft);
+    } else if resp.hovered() {
+        painter.rect_filled(rect, RADIUS, ui.visuals().widgets.hovered.weak_bg_fill);
+    }
+    icons.paint(painter, rect.shrink(3.0), icon);
+    if selected {
+        painter.rect_stroke(rect, RADIUS, Stroke::new(2.0, ACCENT), egui::StrokeKind::Inside);
+    } else if resp.hovered() {
+        painter.rect_stroke(rect, RADIUS, Stroke::new(1.0, pal.muted), egui::StrokeKind::Inside);
+    }
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Edit {
@@ -119,6 +144,86 @@ impl App {
         self.ensure_macros();
         page_header(ui, &tr!("gui.nav.macros"), &tr!("gui.macros_sub"));
         two_columns(ui, self, 240.0, |ui, app| app.ui_macro_list(ui), |ui, app| app.ui_macro_editor(ui));
+        self.ui_icon_picker(ui.ctx());
+    }
+
+    /// Dialog with a grid of all icons: "no icon", pictures 1-40 and number tiles 41-100.
+    fn ui_icon_picker(&mut self, ctx: &egui::Context) {
+        let Some(picker) = self.icon_picker.as_mut() else {
+            return;
+        };
+        let (mut draft, scroll) = (picker.draft, std::mem::take(&mut picker.scroll));
+        let pictures = 1..=ICONS_EMBEDDED;
+        let numbers = ICONS_EMBEDDED + 1..=ICON_COUNT;
+        // labels are built up front because the dialog borrows the icon textures mutably
+        let labels: Vec<String> =
+            std::iter::once(None).chain((1..=ICON_COUNT).map(Some)).map(|i| self.icon_label(i)).collect();
+        let label = |icon: Option<u8>| &labels[usize::from(icon.unwrap_or(0))];
+        let icons = &mut self.icons;
+        let mut apply = false;
+        let mut cancel = false;
+        let max_height = (ctx.content_rect().height() - 260.0).clamp(180.0, 720.0);
+        let modal = egui::Modal::new(egui::Id::new("icon_picker")).show(ctx, |ui| {
+            ui.set_width(PICKER_COLUMNS as f32 * (TILE + TILE_GAP) + 12.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icon::IMAGES).size(20.0).color(ACCENT));
+                ui.heading(tr!("gui.icon_picker_title"));
+            });
+            ui.add_space(6.0);
+            let mut hovered = None;
+            let mut tile = |ui: &mut Ui, icon: Option<u8>| {
+                let resp = icon_tile(ui, icons, icon, draft == icon).on_hover_text(label(icon));
+                if scroll && draft == icon {
+                    resp.scroll_to_me(Some(egui::Align::Center));
+                }
+                if resp.hovered() {
+                    hovered = Some(icon);
+                }
+                if resp.clicked() {
+                    draft = icon;
+                }
+                if resp.double_clicked() {
+                    apply = true;
+                }
+            };
+            ui.horizontal(|ui| {
+                tile(ui, None);
+                ui.label(tr!("names.no_icon"));
+            });
+            ui.add_space(4.0);
+            egui::ScrollArea::vertical().max_height(max_height).show(ui, |ui| {
+                for (title, range) in
+                    [(tr!("gui.icon_section_pictures"), pictures), (tr!("gui.icon_section_numbers"), numbers)]
+                {
+                    ui.add_space(4.0);
+                    widgets::muted(ui, title);
+                    let range: Vec<u8> = range.collect();
+                    for row in range.chunks(PICKER_COLUMNS) {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing = egui::vec2(TILE_GAP, TILE_GAP);
+                            for &n in row {
+                                tile(ui, Some(n));
+                            }
+                        });
+                    }
+                }
+            });
+            ui.separator();
+            ui.add(egui::Label::new(RichText::new(label(hovered.unwrap_or(draft))).strong()).truncate());
+            ui.add_space(4.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                apply |= widgets::accent_button(ui, tr!("gui.apply")).clicked();
+                cancel = ui.button(tr!("gui.cancel")).clicked();
+            });
+        });
+        if apply {
+            self.m_icon = draft;
+            self.icon_picker = None;
+        } else if cancel || modal.should_close() {
+            self.icon_picker = None;
+        } else if let Some(picker) = self.icon_picker.as_mut() {
+            picker.draft = draft;
+        }
     }
 
     fn ui_macro_list(&mut self, ui: &mut Ui) {
@@ -169,7 +274,14 @@ impl App {
                 } else {
                     (name, if selected { ACCENT } else { pal.strong })
                 };
-                painter.text(rect.left_center() + egui::vec2(38.0, 0.0), egui::Align2::LEFT_CENTER, text, font, color);
+                if let Some(n) = romlayout::macro_icon(romlayout::macro_info(&rom, s)) {
+                    let icon_rect = egui::Rect::from_center_size(
+                        rect.left_center() + egui::vec2(47.0, 0.0),
+                        egui::vec2(22.0, 22.0),
+                    );
+                    self.icons.paint(painter, icon_rect, Some(n));
+                }
+                painter.text(rect.left_center() + egui::vec2(66.0, 0.0), egui::Align2::LEFT_CENTER, text, font, color);
                 let bytes = fnc::record_length(used);
                 if bytes > 0 {
                     painter.text(
@@ -224,19 +336,20 @@ impl App {
                 });
                 ui.end_row();
                 ui.label(tr!("gui.icon"));
-                let selected = self.icon_label(self.m_icon);
-                let options: Vec<(Option<u8>, String)> =
-                    std::iter::once(None).chain((1..=ICON_COUNT).map(Some)).map(|i| (i, self.icon_label(i))).collect();
-                egui::ComboBox::from_id_salt("icon")
-                    .selected_text(selected)
-                    .width((ui.available_width() - 8.0).clamp(160.0, 420.0))
-                    .height(300.0)
-                    .truncate()
-                    .show_ui(ui, |ui| {
-                        for (icon, label) in options {
-                            ui.selectable_value(&mut self.m_icon, icon, label);
+                ui.horizontal(|ui| {
+                    let (rect, resp) = ui.allocate_exact_size(egui::vec2(64.0, 64.0), Sense::click());
+                    self.icons.paint(ui.painter(), rect, self.m_icon);
+                    if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                        self.icon_picker = Some(IconPicker::open(self.m_icon));
+                    }
+                    ui.vertical(|ui| {
+                        ui.add_space(6.0);
+                        ui.add(egui::Label::new(self.icon_label(self.m_icon)).truncate());
+                        if widgets::icon_button(ui, icon::IMAGES, &tr!("gui.choose_icon")).clicked() {
+                            self.icon_picker = Some(IconPicker::open(self.m_icon));
                         }
                     });
+                });
                 ui.end_row();
             });
 
