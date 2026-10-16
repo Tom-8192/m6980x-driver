@@ -8,10 +8,12 @@ of this repository.
 - `macro/1.webp` … `macro/40.webp` – pictures 1–40 (same meaning as the built-in pictures of the original software)
 - `macro/frame.webp` – empty frame; the GUI draws the numbers 41–100 on it
 
-All files are 128×128, WebP quality 90 with lossless alpha, and are embedded into the GUI binary. To rebuild them from
-the high-resolution sources:
+All files are 128×128, WebP quality 90 with lossless alpha, and are embedded into the GUI binary.
+
+`source/` holds the high-resolution originals (512×512 PNG, losslessly compressed): `0.png` … `40.png` and
+`frame.png`. Edit or replace them there, then rebuild the WebP files:
 
 ```
 py -3 -m pip install --user pillow
-py -3 assets/icons/make_icons.py <folder with 0.png … 40.png> --frame <empty frame png>
+py -3 assets/icons/make_icons.py
 ```

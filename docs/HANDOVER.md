@@ -180,12 +180,12 @@ autostart, so the mouse is in tilt mode after every login). The settings changed
    wrong 130-packet "init" at every start (overwrites DPI stage 3 and register 0B, activates profile 1),
    ignores the busy/done handshake, sends LED values 0–255 instead of 0–2 and switches the profile when changing the
    colour. Correct would be: only `01 86 <profile> R G B` with handshake, without init.
-3. **Own icons**: done on branch `macro-icons` (not merged yet). 41 own AI icons (0 = empty slot, 1–40 = pictures)
+3. **Own icons**: done, released in 2.4.0. 41 own AI icons (0 = empty slot, 1–40 = pictures)
    plus an empty frame, 128×128 WebP q90 (135 KB in total, measured against PNG 984 KB / lossless WebP 648 KB with
    no visible difference), embedded via `include_bytes!` (`crates/m6980x-gui/src/icons.rs`). 41–100 are drawn as
    the frame with a silver number. GUI: icon preview + "Choose icon…" dialog with a 10-column grid in the macro
-   editor, small icon in the macro list. Rebuild the files with `py -3 assets/icons/make_icons.py <folder> --frame
-   <png>` (sources on Tom's desktop, `ghost icons/rebuilt_icons_hires` + `master_button_plate_rounded.png`).
+   editor, small icon in the macro list. Sources (512 px PNG) in `assets/icons/source/`; rebuild the WebP files with
+   `py -3 assets/icons/make_icons.py`.
    Checked with `--fake` via screenshots (dark theme, German); not yet on the mouse.
 4. GUI 2.2 (see above): Tom to try it by hand and on the mouse (recording, instant apply, reconnect).
 5. Keyboard layout of the macro text: key names follow the German layout in every UI language (y/z swapped);
