@@ -14,7 +14,7 @@ path = "src/main.rs"
 [dependencies]
 eframe = { version = "0.36.2", features = ["persistence"] }
 egui-phosphor = "0.14.0"
-m6980x-core = { version = "2.3.0", path = "../m6980x-core", features = ["fake"] }
+m6980x-core = { version = "2.4.0", path = "../m6980x-core", features = ["fake"] }
 image = { version = "0.25.10", default-features = false, features = ["webp"] }
 rfd = "0.17.2"
 serde_json = "1.0.154"
