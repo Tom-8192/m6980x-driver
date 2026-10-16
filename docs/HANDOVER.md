@@ -22,7 +22,8 @@ OEM **Areson**): lightweight, no installation, **Windows first, always keep Linu
   (`m6980x_configtool_gui`, egui 0.36). Full parity with prototype 1.1.
 - **Parity tests:** `prototype/python/tools/export_fixtures.py` → `tests/fixtures/parity.json`; in 8 scenarios Rust
   sends the same 6423 packets, leaves the same ROM, `.meb`/`.ini` byte-identical. All unit tests of the prototype
-  ported as well. CI (GitHub Actions) on Windows and Ubuntu, also checks that the fixtures match the prototype.
+  ported as well. CI (GitHub Actions) on Windows and Ubuntu, the prototype workflow
+  checks that the fixtures match the prototype (only when `prototype/` or `tests/fixtures/` change).
 - **Cross-process lock** around every command (formerly open task 6): Windows named mutex
   `Local\m6980x_configtool`, Linux `flock` on the hidraw device, max. wait 5 s.
 - Checked **read-only** on the device (Windows): `info`, `buttons`, `dpi`, `rate`, `led`, `rom-dump` (SHA `55906362…`,

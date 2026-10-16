@@ -1,0 +1,32 @@
+name: Prototype
+
+# Python prototype: only runs when the prototype or the parity fixtures change
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "prototype/**"
+      - "tests/fixtures/**"
+      - ".github/workflows/prototype.yml"
+  pull_request:
+    paths:
+      - "prototype/**"
+      - "tests/fixtures/**"
+      - ".github/workflows/prototype.yml"
+
+concurrency:
+  group: prototype-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prototype:
+    # Python prototype: its own tests, and the parity fixtures must match it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m unittest discover -s tests
+        working-directory: prototype/python
+      - run: python prototype/python/tools/export_fixtures.py && git diff --exit-code tests/fixtures
