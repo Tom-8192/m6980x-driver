@@ -162,8 +162,8 @@ impl App {
             ui.painter().circle_filled(rect.center(), 5.0, color);
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
-                let name = if self.name.is_empty() { "M6980X".to_string() } else { self.name.clone() };
-                ui.label(RichText::new(name).strong().color(pal.strong));
+                // The mouse calls itself "G3"; the overview tile shows that name.
+                ui.label(RichText::new("GHOST M6980X").strong().color(pal.strong));
                 ui.label(RichText::new(text).small().color(pal.muted));
             });
             if self.connected == Some(false) && !self.fake {
